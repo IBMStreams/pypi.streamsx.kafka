@@ -1,0 +1,54 @@
+Overview
+========
+
+Provides functions to read messages from a Kafka broker as a stream
+and submit tuples to a Kafka broker as messages.
+
+The broker configuration must be done with properties in an application configuration.
+The minimum set of properties must contain the `bootstrap.servers` configuration, which is valid
+for both consumers and producers, i.e. for the `subscribe` and `publish` functions.
+
+It is also possible to use different application configurations for subscribe and publish
+when special consumer or producer configs must be used.
+
+Sample
+======
+
+A simple hello world example of a Streams application publishing to
+a topic and the same application consuming the same topic::
+
+    from streamsx.topology.topology import Topology
+    from streamsx.topology.schema import CommonSchema
+    from streamsx.topology.context import submit
+    from streamsx.topology.context import ContextTypes
+    import streamsx.kafka as kafka
+    import time
+
+    def delay (v):
+        time.sleep (5.0)
+        return True
+
+    topo = Topology('KafkaHelloWorld')
+
+    to_kafka = topo.source (['Hello', 'World!'])
+    to_kafka = to_kafka.as_string()
+    # delay tuple by tuple
+    to_kafka = to_kafka.filter (delay)
+
+    # Publish a stream to Kafka using TEST topic, the Kafka servers
+    # (bootstrap.servers) are configured in the application configuration 'kafka_props'.
+    kafka.publish (to_kafka, 'TEST', 'kafka_props')
+
+    # Subscribe to same topic as a stream
+    from_kafka = kafka.subscribe (topo, 'TEST', 'kafka_props', CommonSchema.String)
+
+    # You'll find the Hello World! in stdout log file:
+    from_kafka.print()
+
+    submit (ContextTypes.DISTRIBUTED, topo)
+    # The Streams job is kept running.
+
+Documentation
+=============
+
+* `streamsx.kafka package documentation <http://streamsxkafka.readthedocs.io/en/pypackage/>`_
