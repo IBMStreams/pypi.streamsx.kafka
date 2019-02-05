@@ -20,13 +20,15 @@ import json
 ## Streaming analytics service has:
 ##    application config 'kafkatest' configured for a Kafka broker. The minimum property is 'bootstrap.servers'
 ##
+## Kafka configs in a property file denoted by $KAFKA_PROPERTIES. The minimum property is 'bootstrap.servers'
+##
 ## The Kafka broker has:
 ##
 ##    topics T1 and KAFKA_TEST with one partition (1 hour retention)
 ##
 ##
 ## Locally the toolkit exists at and is at least 1.5.1
-## $HOME/toolkits/com.ibm.streamsx.kafka
+## $KAFKA_TOOLKIT_HOME
 
 def _get_properties (properties_file):
     """
