@@ -27,7 +27,7 @@ firefox package/docs/build/html/index.html
 The documentation is also setup at `readthedocs.io` under the account: `IBMStreams`
 
 Documentation links:
-* http://streamsxkafka.readthedocs.io/en/pypackage
+* http://streamsxkafka.readthedocs.io
 
 ## Version update
 

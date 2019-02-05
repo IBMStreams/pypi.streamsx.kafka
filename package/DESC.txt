@@ -51,4 +51,4 @@ a topic and the same application consuming the same topic::
 Documentation
 =============
 
-* `streamsx.kafka package documentation <http://streamsxkafka.readthedocs.io/en/pypackage/>`_
+* `streamsx.kafka package documentation <http://streamsxkafka.readthedocs.io/>`_
