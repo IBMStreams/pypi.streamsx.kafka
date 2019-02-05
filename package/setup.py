@@ -10,7 +10,7 @@ setup(
   author = 'IBM Streams @ github.com',
   author_email = 'rolef.heinrich@de.ibm.com',
   license='Apache License - Version 2.0',
-  url = 'https://github.com/IBMStreams/streamsx.kafka',
+  url = 'https://github.com/IBMStreams/pypi.streamsx.kafka',
   keywords = ['streams', 'ibmstreams', 'streaming', 'analytics', 'streaming-analytics', 'messaging', 'kafka'],
   classifiers = [
     'Development Status :: 4 - Beta',
@@ -20,7 +20,7 @@ setup(
     'Programming Language :: Python :: 3.6',
   ],
   install_requires=['streamsx>=1.11.5a'],
-  
+
   test_suite='nose.collector',
   tests_require=['nose']
 )
