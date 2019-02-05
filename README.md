@@ -21,7 +21,7 @@ make html
 ```
 and viewed using
 ```
-firefox package/docs/build/html/index.html
+firefox build/html/index.html
 ```
 
 The documentation is also setup at `readthedocs.io` under the account: `IBMStreams`
