@@ -4,7 +4,8 @@ Overview
 Provides functions to read messages from a Kafka broker as a stream
 and submit tuples to a Kafka broker as messages.
 
-The broker configuration must be done with properties in an application configuration.
+The broker configuration must be done with properties in an application configuration or a by
+using a dictionary variable.
 The minimum set of properties must contain the `bootstrap.servers` configuration, which is valid
 for both consumers and producers, i.e. for the `subscribe` and `publish` functions.
 

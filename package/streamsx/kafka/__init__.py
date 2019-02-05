@@ -14,7 +14,7 @@ Connection to a Kafka broker
 ++++++++++++++++++++++++++++
 
 To bootstrap servers of the Kafka broker can be defined using a Streams application configuration or
-within the Python code by using a dictionary variable as.
+within the Python code by using a dictionary variable.
 The name of the application configuration or the dictionary must be specified using the ``kafka_properties``
 parameter to :py:func:`subscribe` or :py:func:`publish`.
 The minimum set of properties in the application configuration or dictionary contains ``bootstrap.servers``, for example
