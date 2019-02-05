@@ -74,6 +74,8 @@ For testing Kafka properties with dictionary type, a property file with the `boo
 configuration in it must be created anywhere in the file system and made be available with the
 environmnet variable `KAFKA_PROPERTIES`.
 
+In the broker, a topic with name `KAFKA_TEST` with a single partition must be created.
+
 Run the tests with
 
 ```
