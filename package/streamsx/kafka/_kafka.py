@@ -31,6 +31,69 @@ def _add_properties_file (topology, properties, file_name):
     return 'etc/' + file_name
 
 
+
+def configure_connection (instance, connection):
+    """Configures IBM Streams for a certain connection.
+
+
+    Creates an application configuration object containing the required kafkaProperties with connection information.
+
+
+    Example for creating a configuration for a Streams instance with connection details::
+
+
+        streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        
+        cfg = icpd_util.get_service_instance_details (name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service (cfg)
+        connection = icpd_util.get_connection_details (name='your-connection-name')
+        app_cfg = configure_connection (instance, connection)
+
+
+    Args:
+        instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
+        connection(dict): Bucket name. Bucket must have been created in your Cloud Object Storage service before using this function.
+    Returns:
+        Name of the application configuration.
+    """
+
+    # check type of connection 
+    # Prepare operator (toolkit) specific kafka properties for application configuration
+    name = connection.connectionName
+    description = 'Config for connection ' + name + ' of type ' + connection.connectionType
+    # retrieve values form connection parameter of type dict (connection.connectionData)
+    kafkaProperties = {}
+    kafkaProperties ['bootstrap.servers'] = connection.connectionData ['servers']
+    useSSL = connection.connectionData ['useSSL']
+    if useSSL.upper() in ('TRUE', 'YES', '1'):
+        kafkaProperties ['security.protocol'] = 'SSL'
+        sslProtocol = connection.connectionData ['sslProtocol']
+        if sslProtocol:
+            if sslProtocol in ('TLS', 'TLSv1', 'TLSv1.1', 'TLSv1.2'):
+                kafkaProperties ['ssl.protocol'] = sslProtocol
+            else:
+                print ('ignoring invalid sslProtocol ' + sslProtocol + '. using default value')
+
+    # check if application configuration exists
+    app_config = instance.get_application_configurations (name = name)
+    if app_config:
+        # set the values to None for the keys which are not present in the new property set any more...
+        oldProperties = app_config[0].properties
+        for key, value in oldProperties.items():
+            if not key in kafkaProperties:
+                kafkaProperties[key] = None
+        print ('update application configuration: ' + name)
+        app_config[0].update (kafkaProperties)
+    else:
+        print ('create application configuration: ' + name)
+        instance.create_application_configuration (name, kafkaProperties, description)
+    return name
+
+
+
 def subscribe (topology, topic, kafka_properties, schema, group=None, name=None):
     """Subscribe to messages from a Kafka broker for a single topic.
 
