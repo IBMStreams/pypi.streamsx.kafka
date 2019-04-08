@@ -67,15 +67,16 @@ def configure_connection (instance, connection):
     # retrieve values form connection parameter of type dict (connection.connectionData)
     kafkaProperties = {}
     kafkaProperties ['bootstrap.servers'] = connection.connectionData ['servers']
-    useSSL = connection.connectionData ['useSSL']
-    if useSSL.upper() in ('TRUE', 'YES', '1'):
+    # Return None when key not exists
+    useSSL = connection.connectionData.get ('useSSL')
+    if useSSL and useSSL.upper() in ('TRUE', 'YES', '1'):
         kafkaProperties ['security.protocol'] = 'SSL'
-        sslProtocol = connection.connectionData ['sslProtocol']
+        sslProtocol = connection.connectionData.get ('sslProtocol')
         if sslProtocol:
             if sslProtocol in ('TLS', 'TLSv1', 'TLSv1.1', 'TLSv1.2'):
                 kafkaProperties ['ssl.protocol'] = sslProtocol
             else:
-                print ('ignoring invalid sslProtocol ' + sslProtocol + '. using default value')
+                print ('ignoring invalid sslProtocol ' + sslProtocol + '. Using Kafkas default value')
 
     # check if application configuration exists
     app_config = instance.get_application_configurations (name = name)
@@ -84,6 +85,7 @@ def configure_connection (instance, connection):
         oldProperties = app_config[0].properties
         for key, value in oldProperties.items():
             if not key in kafkaProperties:
+                # set None to delete the property in the application config
                 kafkaProperties[key] = None
         print ('update application configuration: ' + name)
         app_config[0].update (kafkaProperties)
