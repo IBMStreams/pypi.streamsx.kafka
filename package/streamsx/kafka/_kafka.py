@@ -8,7 +8,6 @@ import json
 import streamsx.spl.op
 import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema
-from asyncio.sslproto import SSLProtocol
 
 
 def _add_properties_file (topology, properties, file_name):
