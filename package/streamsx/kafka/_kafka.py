@@ -31,6 +31,66 @@ def _add_properties_file (topology, properties, file_name):
     return 'etc/' + file_name
 
 
+def configure_connection (instance, name, bootstrap_servers, ssl_protocol = None):
+    """Configures IBM Streams for a connection with a Kafka broker.
+
+    Creates an application configuration object containing the required properties with connection information.
+
+    Example for creating a configuration for a Streams instance with connection details::
+
+
+        streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        
+        cfg = icpd_util.get_service_instance_details (name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service (cfg)
+        bootstrap_servers = 'kafka-server-1.domain:9093,kafka-server-2.domain:9093,kafka-server-3.domain:9093'
+        app_cfg_name = configure_connection (instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
+
+
+    Args:
+        instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
+        name(str): Name of the application configuration.
+        bootstrap_servers(str): Comma separated List of hostname:TCPport of the Kafka-servers
+        ssl_protocol(str): One of None, 'TLS', 'TLSv1', 'TLSv1.1', or 'TLSv1.2'. If None is used, TLS is not configured.
+    Returns:
+        Name of the application configuration, i.e. the same value as given in the name parameter
+    """
+    if name is None:
+        raise TypeError (name)
+    if bootstrap_servers is None:
+        raise TypeError (bootstrap_servers)
+    
+    description = 'Kafka server connection properties'
+    # retrieve values form connection parameter of type dict (connection.connectionData)
+    kafkaProperties = {}
+    kafkaProperties ['bootstrap.servers'] = bootstrap_servers
+    if ssl_protocol:
+        kafkaProperties ['security.protocol'] = 'SSL'
+        if ssl_protocol in ('TLS', 'TLSv1', 'TLSv1.1', 'TLSv1.2'):
+            kafkaProperties ['ssl.protocol'] = ssl_protocol
+        else:
+            print ('ignoring invalid sslProtocol ' + ssl_protocol + '. Using Kafkas default value')
+    # check if application configuration exists
+    app_config = instance.get_application_configurations (name = name)
+    if app_config:
+        # set the values to None for the keys which are not present in the new property set any more...
+        oldProperties = app_config[0].properties
+        for key, value in oldProperties.items():
+            if not key in kafkaProperties:
+                # set None to delete the property in the application config
+                kafkaProperties[key] = None
+        print ('update application configuration: ' + name)
+        app_config[0].update (kafkaProperties)
+    else:
+        print ('create application configuration: ' + name)
+        instance.create_application_configuration (name, kafkaProperties, description)
+    return name
+
+
+
 def subscribe (topology, topic, kafka_properties, schema, group=None, name=None):
     """Subscribe to messages from a Kafka broker for a single topic.
 
@@ -40,7 +100,7 @@ def subscribe (topology, topic, kafka_properties, schema, group=None, name=None)
     Args:
         topology(Topology): Topology that will contain the stream of messages.
         topic(str): Topic to subscribe messages from.
-        kafka_properties(str|dict): Properties containing the consumer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application, which contains consumer configs. Must not be set to ``None``.
+        kafka_properties(str|dict): Properties containing the consumer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains consumer configs. Must not be set to ``None``.
         schema(StreamSchema): Schema for returned stream.
         group(str): Kafka consumer group identifier. When not specified it default to the job name with `topic` appended separated by an underscore.
         name(str): Consumer name in the Streams context, defaults to a generated name.
@@ -81,7 +141,7 @@ def publish(stream, topic, kafka_properties, name=None):
     Args:
         stream(Stream): Stream of tuples to published as messages.
         topic(str): Topic to publish messages to.
-        kafka_properties(str|dict): Properties containing the producer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application, which contains consumer configs. Must not be set to ``None``.
+        kafka_properties(str|dict): Properties containing the producer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains producer configs. Must not be set to ``None``.
         name(str): Producer name in the Streams context, defaults to a generated name.
 
     Returns:
