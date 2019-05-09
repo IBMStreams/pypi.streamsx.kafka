@@ -4,5 +4,4 @@ package/build/
 package/dist/
 package/streamsx.kafka.egg-info/
 package/docs/build/
-
-/.project
+.settings/
