@@ -160,9 +160,9 @@ def publish(stream, topic, kafka_properties, name=None):
         else:
             fName = 'producer-' + str(name) + '.' + str(topic) + '.properties'
         propsFilename = _add_properties_file (stream.topology, kafka_properties, fName)
-        _op = _KafkaProducer (stream, propertiesFile=propsFilename, topic=topic)
+        _op = _KafkaProducer (stream, propertiesFile=propsFilename, topic=topic, name = name)
     else:
-        _op = _KafkaProducer (stream, appConfigName=kafka_properties, topic=topic)
+        _op = _KafkaProducer (stream, appConfigName=kafka_properties, topic=topic, name = name)
 
     _op.params['messageAttribute'] = _op.attribute(stream, msg_attr)
 
@@ -213,7 +213,7 @@ class _KafkaConsumer(streamsx.spl.op.Source):
             params['triggerCount'] = triggerCount
         if userLib is not None:
             params['userLib'] = userLib
-        super(_KafkaConsumer, self).__init__(topology,kind,schemas,params,name)
+        super(_KafkaConsumer, self).__init__(topology, kind, schemas, params, name)
 
 
 class _KafkaProducer(streamsx.spl.op.Sink):
@@ -243,4 +243,4 @@ class _KafkaProducer(streamsx.spl.op.Sink):
             params['topic'] = topic
         if userLib is not None:
             params['userLib'] = userLib
-        super(_KafkaProducer, self).__init__(kind,stream,params,name)
+        super(_KafkaProducer, self).__init__(kind, stream, params, name)
