@@ -5,7 +5,7 @@ import streamsx.kafka as kafka
 from streamsx.topology.topology import Topology
 from streamsx.topology.tester import Tester
 from streamsx.topology.schema import CommonSchema, StreamSchema
-
+from streamsx.kafka.schema import Schema as MsgSchema
 import streamsx.spl.toolkit
 
 import datetime
@@ -45,6 +45,10 @@ class TestSubscribeParams(TestCase):
         topo = Topology()
         kafka.subscribe(topo, 'T1', 'kafkatest', CommonSchema.String)
         kafka.subscribe(topo, 'T1', 'kafkatest', CommonSchema.Json)
+        kafka.subscribe(topo, 'T1', 'kafkatest', MsgSchema.StringMessage)
+        kafka.subscribe(topo, 'T1', 'kafkatest', MsgSchema.BinaryMessage)
+        kafka.subscribe(topo, 'T1', 'kafkatest', MsgSchema.StringMessageMeta)
+        kafka.subscribe(topo, 'T1', 'kafkatest', MsgSchema.BinaryMessageMeta)
 
     def test_schemas_bad(self):
         topo = Topology()
@@ -60,6 +64,45 @@ class TestSubscribeParams(TestCase):
         topo = Topology()
         kafka.subscribe(topo, 'KAFKA_TEST', properties, CommonSchema.String)
         kafka.subscribe(topo, 'KAFKA_TEST', 'kafkatest', CommonSchema.String)
+
+class TestPublishParams(TestCase):
+    def test_schemas_ok(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        jsonStream = pyObjStream.as_json()
+        stringStream = pyObjStream.as_string()
+        binMsgStream = pyObjStream.map (func=lambda s: {'message': bytes(s, 'utf-8'), 'key': s}, schema=MsgSchema.BinaryMessage)
+        strMsgStream = pyObjStream.map (func=lambda s: {'message': s, 'key': s}, schema=MsgSchema.StringMessage)
+        kafka.publish (binMsgStream, "Topic", "AppConfig")
+        kafka.publish (strMsgStream, "Topic", "AppConfig")
+        kafka.publish (stringStream, "Topic", "AppConfig")
+        kafka.publish (jsonStream, "Topic", "AppConfig")
+
+    def test_schemas_bad(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        binStream = pyObjStream.map (func=lambda s: bytes ("ABC", utf-8), schema=CommonSchema.Binary)
+        xmlStream = pyObjStream.map (schema=CommonSchema.XML)
+        binMsgMetaStream = pyObjStream.map (func=lambda s: {'message': bytes(s, 'utf-8'), 'key': s}, schema=MsgSchema.BinaryMessageMeta)
+        strMsgMetaStream = pyObjStream.map (func=lambda s: {'message': s, 'key': s}, schema=MsgSchema.StringMessageMeta)
+        otherSplTupleStream1 = pyObjStream.map (schema=StreamSchema('tuple<int32 a>'))
+        otherSplTupleStream2 = pyObjStream.map (schema='tuple<int32 a>')
+        
+        self.assertRaises(TypeError, kafka.publish, pyObjStream, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, binStream, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, xmlStream, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, binMsgMetaStream, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, strMsgMetaStream, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, otherSplTupleStream1, "Topic", "AppConfig")
+        self.assertRaises(TypeError, kafka.publish, otherSplTupleStream2, "Topic", "AppConfig")
+
+    def test_kafka_properties (self):
+        # in this testcase we do not connect to the broker @localhost
+        properties = {'bootstrap.servers': 'localhost:9092'}
+        topo = Topology()
+        jsonStream = topo.source(['Hello', 'World!']).as_json()
+        kafka.publish (jsonStream, 'Topic', properties, name = 'Publish-1')
+        kafka.publish (jsonStream, 'Topic', 'AppConfig', name = 'Publish-2')
 
 ## Using a uuid to avoid concurrent test runs interferring
 ## with each other

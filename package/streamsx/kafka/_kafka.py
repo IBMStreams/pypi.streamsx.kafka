@@ -8,9 +8,10 @@ import json
 import streamsx.spl.op
 import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema
+from streamsx.kafka.schema import Schema
 
 
-def _add_properties_file (topology, properties, file_name):
+def _add_properties_file(topology, properties, file_name):
     """
     Adds properties as a dictionary as a file dependency to the topology
 
@@ -24,14 +25,14 @@ def _add_properties_file (topology, properties, file_name):
     """
     tmpdirname = gettempdir()
     tmpfile = tmpdirname + '/' + file_name
-    with open (tmpfile, "w") as properties_file:
+    with open(tmpfile, "w") as properties_file:
         for key, value in properties.items():
-            properties_file.write (key + '=' + value + '\n')
-    topology.add_file_dependency (tmpfile, 'etc')
+            properties_file.write(key + '=' + value + '\n')
+    topology.add_file_dependency(tmpfile, 'etc')
     return 'etc/' + file_name
 
 
-def configure_connection (instance, name, bootstrap_servers, ssl_protocol = None):
+def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None):
     """Configures IBM Streams for a connection with a Kafka broker.
 
     Creates an application configuration object containing the required properties with connection information.
@@ -43,11 +44,11 @@ def configure_connection (instance, name, bootstrap_servers, ssl_protocol = None
         import streamsx.topology.context
         from icpd_core import icpd_util
         
-        cfg = icpd_util.get_service_instance_details (name='your-streams-instance')
+        cfg = icpd_util.get_service_instance_details(name='your-streams-instance')
         cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
-        instance = Instance.of_service (cfg)
+        instance = Instance.of_service(cfg)
         bootstrap_servers = 'kafka-server-1.domain:9093,kafka-server-2.domain:9093,kafka-server-3.domain:9093'
-        app_cfg_name = configure_connection (instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
+        app_cfg_name = configure_connection(instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
 
 
     Args:
@@ -57,24 +58,27 @@ def configure_connection (instance, name, bootstrap_servers, ssl_protocol = None
         ssl_protocol(str): One of None, 'TLS', 'TLSv1', 'TLSv1.1', or 'TLSv1.2'. If None is used, TLS is not configured.
     Returns:
         Name of the application configuration, i.e. the same value as given in the name parameter
+
+    .. warning:: The function can be used only in IBM Cloud Private for Data
+    .. versionadded:: 1.1
     """
     if name is None:
-        raise TypeError (name)
+        raise TypeError(name)
     if bootstrap_servers is None:
-        raise TypeError (bootstrap_servers)
+        raise TypeError(bootstrap_servers)
     
     description = 'Kafka server connection properties'
     # retrieve values form connection parameter of type dict (connection.connectionData)
     kafkaProperties = {}
-    kafkaProperties ['bootstrap.servers'] = bootstrap_servers
+    kafkaProperties['bootstrap.servers'] = bootstrap_servers
     if ssl_protocol:
-        kafkaProperties ['security.protocol'] = 'SSL'
+        kafkaProperties['security.protocol'] = 'SSL'
         if ssl_protocol in ('TLS', 'TLSv1', 'TLSv1.1', 'TLSv1.2'):
-            kafkaProperties ['ssl.protocol'] = ssl_protocol
+            kafkaProperties['ssl.protocol'] = ssl_protocol
         else:
-            print ('ignoring invalid sslProtocol ' + ssl_protocol + '. Using Kafkas default value')
+            print('ignoring invalid sslProtocol ' + ssl_protocol + '. Using Kafkas default value')
     # check if application configuration exists
-    app_config = instance.get_application_configurations (name = name)
+    app_config = instance.get_application_configurations(name = name)
     if app_config:
         # set the values to None for the keys which are not present in the new property set any more...
         oldProperties = app_config[0].properties
@@ -82,16 +86,16 @@ def configure_connection (instance, name, bootstrap_servers, ssl_protocol = None
             if not key in kafkaProperties:
                 # set None to delete the property in the application config
                 kafkaProperties[key] = None
-        print ('update application configuration: ' + name)
-        app_config[0].update (kafkaProperties)
+        print('update application configuration: ' + name)
+        app_config[0].update(kafkaProperties)
     else:
-        print ('create application configuration: ' + name)
-        instance.create_application_configuration (name, kafkaProperties, description)
+        print('create application configuration: ' + name)
+        instance.create_application_configuration(name, kafkaProperties, description)
     return name
 
 
 
-def subscribe (topology, topic, kafka_properties, schema, group=None, name=None):
+def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
     """Subscribe to messages from a Kafka broker for a single topic.
 
     Adds a Kafka consumer that subscribes to a topic
@@ -100,7 +104,7 @@ def subscribe (topology, topic, kafka_properties, schema, group=None, name=None)
     Args:
         topology(Topology): Topology that will contain the stream of messages.
         topic(str): Topic to subscribe messages from.
-        kafka_properties(str|dict): Properties containing the consumer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains consumer configs. Must not be set to ``None``.
+        kafka_properties(dict|str): Properties containing the consumer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains consumer configs. Must not be set to ``None``.
         schema(StreamSchema): Schema for returned stream.
         group(str): Kafka consumer group identifier. When not specified it default to the job name with `topic` appended separated by an underscore.
         name(str): Consumer name in the Streams context, defaults to a generated name.
@@ -108,15 +112,28 @@ def subscribe (topology, topic, kafka_properties, schema, group=None, name=None)
     Returns:
          Stream: Stream containing messages.
     """
+    msg_attr_name = None
     if schema is CommonSchema.Json:
         msg_attr_name='jsonString'
     elif schema is CommonSchema.String:
         msg_attr_name='string'
+    elif schema is Schema.BinaryMessage:
+        # msg_attr_name = 'message'
+        pass
+    elif schema is Schema.StringMessage:
+        # msg_attr_name = 'message'
+        pass
+    elif schema is Schema.BinaryMessageMeta:
+        # msg_attr_name = 'message'
+        pass
+    elif schema is Schema.StringMessageMeta:
+        # msg_attr_name = 'message'
+        pass
     else:
         raise TypeError(schema)
 
     if group is None:
-        group = streamsx.spl.op.Expression.expression('getJobName() + "_" + "' + str (topic) + '"')
+        group = streamsx.spl.op.Expression.expression('getJobName() + "_" + "' + str(topic) + '"')
 
     if name is None:
         name = topic
@@ -124,11 +141,22 @@ def subscribe (topology, topic, kafka_properties, schema, group=None, name=None)
     else:
         fName = 'consumer-' + str(name) + '.' + str(topic) + '.properties'
 
-    if isinstance (kafka_properties, dict):
-        propsFilename = _add_properties_file (topology, kafka_properties, fName)
-        _op = _KafkaConsumer (topology, schema=schema, outputMessageAttributeName=msg_attr_name, propertiesFile=propsFilename, topic=topic, groupId=group, name=name)
+    if isinstance(kafka_properties, dict):
+        propsFilename = _add_properties_file(topology, kafka_properties, fName)
+        print ("Adding properties file " + propsFilename + " to the topology " + topology.name)
+        _op = _KafkaConsumer(topology, schema=schema,
+                             outputMessageAttributeName=msg_attr_name,
+                             propertiesFile=propsFilename, 
+                             topic=topic, 
+                             groupId=group, 
+                             name=name)
     else:
-        _op = _KafkaConsumer (topology, schema=schema, outputMessageAttributeName=msg_attr_name, appConfigName=kafka_properties, topic=topic, groupId=group, name=name)
+        _op = _KafkaConsumer(topology, schema=schema,
+                             outputMessageAttributeName=msg_attr_name,
+                             appConfigName=kafka_properties,
+                             topic=topic,
+                             groupId=group,
+                             name=name)
     return _op.stream
 
 
@@ -139,32 +167,47 @@ def publish(stream, topic, kafka_properties, name=None):
     published as a stream message.
 
     Args:
-        stream(Stream): Stream of tuples to published as messages.
+        stream(Stream): Stream of tuples to be published as messages.
         topic(str): Topic to publish messages to.
-        kafka_properties(str|dict): Properties containing the producer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains producer configs. Must not be set to ``None``.
+        kafka_properties(dict|str): Properties containing the producer configurations, at minimum the ``bootstrap.servers`` property. When a string is given, it is the name of the application configuration, which contains producer configs. Must not be set to ``None``.
         name(str): Producer name in the Streams context, defaults to a generated name.
 
     Returns:
         streamsx.topology.topology.Sink: Stream termination.
     """
-    if stream.oport.schema == CommonSchema.Json:
-        msg_attr = 'jsonString'
-    elif stream.oport.schema == CommonSchema.String:
-        msg_attr = 'string'
+    msg_attr_name = None
+    streamSchema = stream.oport.schema
+    if streamSchema == CommonSchema.Json:
+        msg_attr_name = 'jsonString'
+    elif streamSchema == CommonSchema.String:
+        msg_attr_name = 'string'
+    elif streamSchema is Schema.BinaryMessage:
+        # msg_attr_name = 'message'
+        pass
+    elif streamSchema is Schema.StringMessage:
+        # msg_attr_name = 'message'
+        pass
     else:
-        raise TypeError(schema)
+        raise TypeError(streamSchema)
 
-    if isinstance (kafka_properties, dict):
+    if isinstance(kafka_properties, dict):
         if name is None:
             fName = 'producer-' + str(topic) + '.properties'
         else:
             fName = 'producer-' + str(name) + '.' + str(topic) + '.properties'
-        propsFilename = _add_properties_file (stream.topology, kafka_properties, fName)
-        _op = _KafkaProducer (stream, propertiesFile=propsFilename, topic=topic)
+        propsFilename = _add_properties_file(stream.topology, kafka_properties, fName)
+        print ("Adding properties file " + propsFilename + " to the topology " + stream.topology.name)
+        _op = _KafkaProducer(stream,
+                             messageAttributeName=msg_attr_name,
+                             propertiesFile=propsFilename,
+                             topic=topic,
+                             name = name)
     else:
-        _op = _KafkaProducer (stream, appConfigName=kafka_properties, topic=topic)
-
-    _op.params['messageAttribute'] = _op.attribute(stream, msg_attr)
+        _op = _KafkaProducer(stream,
+                             appConfigName=kafka_properties,
+                             messageAttributeName=msg_attr_name,
+                             topic=topic,
+                             name = name)
 
     return streamsx.topology.topology.Sink(_op)
 
@@ -213,34 +256,35 @@ class _KafkaConsumer(streamsx.spl.op.Source):
             params['triggerCount'] = triggerCount
         if userLib is not None:
             params['userLib'] = userLib
-        super(_KafkaConsumer, self).__init__(topology,kind,schemas,params,name)
+        super(_KafkaConsumer, self).__init__(topology, kind, schemas, params, name)
 
 
 class _KafkaProducer(streamsx.spl.op.Sink):
-    def __init__(self, stream, vmArg=None, appConfigName=None, clientId=None, keyAttribute=None, messageAttribute=None, partitionAttribute=None, propertiesFile=None, timestampAttribute=None, topicAttribute=None, topic=None, userLib=None, name=None):
-        topology = stream.topology
+    def __init__(self, stream, vmArg=None, appConfigName=None, clientId=None, keyAttributeName=None, messageAttributeName=None, partitionAttributeName=None, propertiesFile=None, timestampAttributeName=None, topicAttributeName=None, topic=None, userLib=None, name=None):
+        # topology = stream.topology
         kind="com.ibm.streamsx.kafka::KafkaProducer"
         params = dict()
         if vmArg is not None:
             params['vmArg'] = vmArg
         if appConfigName is not None:
             params['appConfigName'] = appConfigName
-        if keyAttribute is not None:
-            params['keyAttribute'] = keyAttribute
         if clientId is not None:
             params['clientId'] = clientId
-        if messageAttribute is not None:
-            params['messageAttribute'] = messageAttribute
-        if partitionAttribute is not None:
-            params['partitionAttribute'] = partitionAttribute
         if propertiesFile is not None:
             params['propertiesFile'] = propertiesFile
-        if timestampAttribute is not None:
-            params['timestampAttribute'] = timestampAttribute
-        if topicAttribute is not None:
-            params['topicAttribute'] = topicAttribute
         if topic is not None:
             params['topic'] = topic
         if userLib is not None:
             params['userLib'] = userLib
-        super(_KafkaProducer, self).__init__(kind,stream,params,name)
+        super(_KafkaProducer, self).__init__(kind, stream, params, name)
+        # create the input attribute expressions after base class initialization
+        if messageAttributeName is not None:
+            params['messageAttribute'] = self.attribute(stream, messageAttributeName)
+        if keyAttributeName is not None:
+            params['keyAttribute'] = self.attribute(stream, keyAttributeName)
+        if partitionAttributeName is not None:
+            params['partitionAttribute'] = self.attribute(stream, partitionAttributeName)
+        if timestampAttributeName is not None:
+            params['timestampAttribute'] = self.attribute(stream, timestampAttributeName)
+        if topicAttributeName is not None:
+            params['topicAttribute'] = self.attribute(stream, topicAttributeName)

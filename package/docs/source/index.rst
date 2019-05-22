@@ -7,6 +7,7 @@ IBM Streams Kafka integration
 ===================================
 
 .. automodule:: streamsx.kafka
+.. automodule:: streamsx.kafka.schema
 
 Indices and tables
 ==================
