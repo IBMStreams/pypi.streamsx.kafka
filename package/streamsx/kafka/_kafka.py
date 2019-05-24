@@ -23,6 +23,8 @@ def _add_properties_file(topology, properties, file_name):
     Returns:
         'etc/' + file_name
     """
+    if len(properties.keys()) == 0:
+        raise ValueError ("properties(dict) is empty. Please add at least the property 'bootstrap.servers'.")
     tmpdirname = gettempdir()
     tmpfile = tmpdirname + '/' + file_name
     with open(tmpfile, "w") as properties_file:
@@ -198,22 +200,52 @@ def publish(stream, topic, kafka_properties, name=None):
         propsFilename = _add_properties_file(stream.topology, kafka_properties, fName)
         print ("Adding properties file " + propsFilename + " to the topology " + stream.topology.name)
         _op = _KafkaProducer(stream,
-                             messageAttributeName=msg_attr_name,
                              propertiesFile=propsFilename,
                              topic=topic,
                              name = name)
     else:
         _op = _KafkaProducer(stream,
                              appConfigName=kafka_properties,
-                             messageAttributeName=msg_attr_name,
                              topic=topic,
                              name = name)
+
+    # create the input attribute expressions after operator _op initialization
+    if msg_attr_name is not None:
+        _op.params['messageAttribute'] = _op.attribute(stream, msg_attr_name)
+#    if keyAttributeName is not None:
+#        params['keyAttribute'] = _op.attribute(stream, keyAttributeName)
+#    if partitionAttributeName is not None:
+#        params['partitionAttribute'] = _op.attribute(stream, partitionAttributeName)
+#    if timestampAttributeName is not None:
+#        params['timestampAttribute'] = _op.attribute(stream, timestampAttributeName)
+#    if topicAttributeName is not None:
+#        params['topicAttribute'] = _op.attribute(stream, topicAttributeName)
 
     return streamsx.topology.topology.Sink(_op)
 
 
 class _KafkaConsumer(streamsx.spl.op.Source):
-  def __init__(self, topology, schema, vmArg=None, appConfigName=None, clientId=None, commitCount=None, groupId=None, outputKeyAttributeName=None, outputMessageAttributeName=None, outputTimestampAttributeName=None, outputOffsetAttributeName=None, outputPartitionAttributeName=None, outputTopicAttributeName=None, partition=None, propertiesFile=None, startPosition=None, startOffset=None, startTime=None, topic=None, triggerCount=None, userLib=None, name=None):
+  def __init__(self, topology, schema,
+               vmArg=None,
+               appConfigName=None,
+               clientId=None,
+               commitCount=None,
+               groupId=None,
+               outputKeyAttributeName=None,
+               outputMessageAttributeName=None,
+               outputTimestampAttributeName=None,
+               outputOffsetAttributeName=None,
+               outputPartitionAttributeName=None,
+               outputTopicAttributeName=None,
+               partition=None,
+               propertiesFile=None,
+               startPosition=None,
+               startOffset=None,
+               startTime=None,
+               topic=None,
+               triggerCount=None,
+               userLib=None,
+               name=None):
         kind="com.ibm.streamsx.kafka::KafkaConsumer"
         inputs=None
         schemas=schema
@@ -260,7 +292,14 @@ class _KafkaConsumer(streamsx.spl.op.Source):
 
 
 class _KafkaProducer(streamsx.spl.op.Sink):
-    def __init__(self, stream, vmArg=None, appConfigName=None, clientId=None, keyAttributeName=None, messageAttributeName=None, partitionAttributeName=None, propertiesFile=None, timestampAttributeName=None, topicAttributeName=None, topic=None, userLib=None, name=None):
+    def __init__(self, stream,
+                 vmArg=None,
+                 appConfigName=None,
+                 clientId=None,
+                 propertiesFile=None,
+                 topic=None,
+                 userLib=None,
+                 name=None):
         # topology = stream.topology
         kind="com.ibm.streamsx.kafka::KafkaProducer"
         params = dict()
@@ -277,14 +316,3 @@ class _KafkaProducer(streamsx.spl.op.Sink):
         if userLib is not None:
             params['userLib'] = userLib
         super(_KafkaProducer, self).__init__(kind, stream, params, name)
-        # create the input attribute expressions after base class initialization
-        if messageAttributeName is not None:
-            params['messageAttribute'] = self.attribute(stream, messageAttributeName)
-        if keyAttributeName is not None:
-            params['keyAttribute'] = self.attribute(stream, keyAttributeName)
-        if partitionAttributeName is not None:
-            params['partitionAttribute'] = self.attribute(stream, partitionAttributeName)
-        if timestampAttributeName is not None:
-            params['timestampAttribute'] = self.attribute(stream, timestampAttributeName)
-        if topicAttributeName is not None:
-            params['topicAttribute'] = self.attribute(stream, topicAttributeName)
