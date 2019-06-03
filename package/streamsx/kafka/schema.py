@@ -37,6 +37,7 @@ class Schema:
     have the attributes ``message``, ``key``, ``topic``, ``partition``, ``offset``, and ``messageTimestamp``. They vary in the type for the 
     ``message`` attribute and can be used for :py:meth:`~streamsx.kafka.subscribe` and :py:meth:`~streamsx.kafka.publish`.
     
+    All schemas defined in this class are instances of `streamsx.topology.schema.StreamSchema`.
     
     The following sample uses structured schemas for publishing messages with keys to a 
     possibly partitioned topic in a Kafka broker. Then, it creates a consumer group 

@@ -23,6 +23,11 @@ def _add_properties_file(topology, properties, file_name):
     Returns:
         'etc/' + file_name
     """
+    if properties is None:
+        raise TypeError(properties)
+    if file_name is None:
+        raise TypeError(file_name)
+
     if len(properties.keys()) == 0:
         raise ValueError ("properties(dict) is empty. Please add at least the property 'bootstrap.servers'.")
     tmpdirname = gettempdir()
@@ -31,7 +36,9 @@ def _add_properties_file(topology, properties, file_name):
         for key, value in properties.items():
             properties_file.write(key + '=' + value + '\n')
     topology.add_file_dependency(tmpfile, 'etc')
-    return 'etc/' + file_name
+    fName = 'etc/' + file_name
+    print("Adding properties file " + fName + " to the topology " + topology.name)
+    return fName
 
 
 def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None):
@@ -114,6 +121,8 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
     Returns:
          Stream: Stream containing messages.
     """
+    if topic is None:
+        raise TypeError(topic)
     msg_attr_name = None
     if schema is CommonSchema.Json:
         msg_attr_name='jsonString'
@@ -145,20 +154,22 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
 
     if isinstance(kafka_properties, dict):
         propsFilename = _add_properties_file(topology, kafka_properties, fName)
-        print ("Adding properties file " + propsFilename + " to the topology " + topology.name)
         _op = _KafkaConsumer(topology, schema=schema,
                              outputMessageAttributeName=msg_attr_name,
                              propertiesFile=propsFilename, 
                              topic=topic, 
                              groupId=group, 
                              name=name)
-    else:
+    elif isinstance(kafka_properties, str):
         _op = _KafkaConsumer(topology, schema=schema,
                              outputMessageAttributeName=msg_attr_name,
                              appConfigName=kafka_properties,
                              topic=topic,
                              groupId=group,
                              name=name)
+    else:
+        raise TypeError(kafka_properties)
+
     return _op.stream
 
 
@@ -177,6 +188,8 @@ def publish(stream, topic, kafka_properties, name=None):
     Returns:
         streamsx.topology.topology.Sink: Stream termination.
     """
+    if topic is None:
+        raise TypeError(topic)
     msg_attr_name = None
     streamSchema = stream.oport.schema
     if streamSchema == CommonSchema.Json:
@@ -198,16 +211,17 @@ def publish(stream, topic, kafka_properties, name=None):
         else:
             fName = 'producer-' + str(name) + '.' + str(topic) + '.properties'
         propsFilename = _add_properties_file(stream.topology, kafka_properties, fName)
-        print ("Adding properties file " + propsFilename + " to the topology " + stream.topology.name)
         _op = _KafkaProducer(stream,
                              propertiesFile=propsFilename,
                              topic=topic,
                              name = name)
-    else:
+    elif isinstance(kafka_properties, str):
         _op = _KafkaProducer(stream,
                              appConfigName=kafka_properties,
                              topic=topic,
                              name = name)
+    else:
+        raise TypeError(kafka_properties)
 
     # create the input attribute expressions after operator _op initialization
     if msg_attr_name is not None:
