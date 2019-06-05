@@ -1,1 +1,1 @@
-streamsx
+streamsx>=1.12.10
