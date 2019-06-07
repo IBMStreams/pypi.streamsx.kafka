@@ -5,3 +5,7 @@ package/dist/
 package/streamsx.kafka.egg-info/
 package/docs/build/
 .settings/
+
+
+.DS_Store
+/**/.DS_Store
