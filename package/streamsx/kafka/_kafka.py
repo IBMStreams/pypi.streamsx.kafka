@@ -68,7 +68,7 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None)
     Returns:
         Name of the application configuration, i.e. the same value as given in the name parameter
 
-    .. warning:: The function can be used only in IBM Cloud Private for Data
+    .. warning:: The function can be used only in IBM Cloud Pak for Data
     .. versionadded:: 1.1
     """
     if name is None:
