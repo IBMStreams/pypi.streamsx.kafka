@@ -41,10 +41,16 @@ def _add_properties_file(topology, properties, file_name):
     return fName
 
 
-def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None):
+def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None, enableHostnameVerification = True):
     """Configures IBM Streams for a connection with a Kafka broker.
 
     Creates an application configuration object containing the required properties with connection information.
+    The application configuration contains following properties:
+    
+    - bootstrap.servers
+    - security.protocol (when `ssl_protocol` is not None)
+    - ssl.protocol (when `ssl_protocol` is not None)
+    - ssl.endpoint.identification.algorithm (when `enableHostnameVerification` is False)
 
     Example for creating a configuration for a Streams instance with connection details::
 
@@ -63,8 +69,11 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None)
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
         name(str): Name of the application configuration.
-        bootstrap_servers(str): Comma separated List of hostname:TCPport of the Kafka-servers
-        ssl_protocol(str): One of None, 'TLS', 'TLSv1', 'TLSv1.1', or 'TLSv1.2'. If None is used, TLS is not configured.
+        bootstrap_servers(str): Comma separated List of hostname:TCPport of the Kafka-bootstrap-servers
+        ssl_protocol(str): One of None, 'TLS', 'TLSv1', 'TLSv1.1', or 'TLSv1.2'.
+            If None is used, TLS is not configured. If unsure, use 'TLS', which is Kafka's default.
+        enableHostnameVerification(bool): When `True` (default), hostname verification of server certificate
+            is enabled, when `False`, hostname verification is disabled. The parameter is ignored, when `ssl_protocol` is None.
     Returns:
         Name of the application configuration, i.e. the same value as given in the name parameter
 
@@ -75,6 +84,15 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None)
         raise TypeError(name)
     if bootstrap_servers is None:
         raise TypeError(bootstrap_servers)
+    if not isinstance(name, str):
+        raise TypeError(name)
+    if not isinstance(bootstrap_servers, str):
+        raise TypeError(bootstrap_servers)
+    if not (isinstance(ssl_protocol, str) or ssl_protocol is None):
+        raise TypeError(ssl_protocol)
+    if not isinstance(enableHostnameVerification, bool):
+        raise TypeError(enableHostnameVerification)
+    
     
     description = 'Kafka server connection properties'
     # retrieve values form connection parameter of type dict (connection.connectionData)
@@ -86,6 +104,9 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None)
             kafkaProperties['ssl.protocol'] = ssl_protocol
         else:
             print('ignoring invalid sslProtocol ' + ssl_protocol + '. Using Kafkas default value')
+        if not enableHostnameVerification:
+            kafkaProperties['ssl.endpoint.identification.algorithm'] = ''
+    print (kafkaProperties)
     # check if application configuration exists
     app_config = instance.get_application_configurations(name = name)
     if app_config:
