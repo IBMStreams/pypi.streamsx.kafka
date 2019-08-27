@@ -33,7 +33,7 @@ The consumer and producer configs can be found in the `Kafka documentation <http
 Please note, that the underlying SPL toolkit already adjusts several configurations.
 Please contact the `toolkit operator reference <https://ibmstreams.github.io/streamsx.kafka/doc/spldoc/html/>`_.
 
-Connection parameter example::
+Simple connection parameter example::
 
     import streamsx.kafka as kafka
     from streamsx.topology.topology import Topology
@@ -45,6 +45,51 @@ Connection parameter example::
     consumerProperties['max.partition.fetch.bytes'] = '4194304'
     topology = Topology()
     kafka.subscribe(topology, 'Your_Topic', consumerProperties, CommonSchema.String)
+
+When trusted certificates, or client certificates, and private keys are required to connect with a Kafka cluster,
+the function :py:func:`create_connection_properties <create_connection_properties>` helps to create stores for
+certificates and keys, and creates the right properties.
+
+In IBM Cloud Pak for Data it is also possible to create application configurations for consumer and 
+producer properties. An application configuration is a safe place to store sensitive data. Use the
+function :py:func:`configure_connection_from_properties <configure_connection_from_properties>` 
+to create an application configuration for kafka properties.
+
+Example with use of an application configuration::
+
+    from icpd_core import icpd_util
+    
+    from streamsx.topology.topology import Topology
+    from streamsx.topology.schema import CommonSchema
+    import streamsx.kafka as kafka
+    
+    topology = Topology('ConsumeFromKafka')
+    
+    connection_properties = kafka.create_connection_properties(
+        bootstrap_servers='kafka-bootstrap.192.168.42.183.nip.io:443',
+        #use_TLS=True,
+        #enable_hostname_verification=True,
+        cluster_ca_cert='/tmp/secrets/cluster_ca_cert.pem',
+        authentication = kafka.AuthMethod.SCRAM_SHA_512,
+        username = 'user123',
+        password = 'passw0rd', # not the very best choice for a password
+        topology = topology)
+    
+    consumer_properties = dict()
+    # In this example we read only transactionally committed messages
+    consumer_properties['isolation.level'] = 'read_committed'
+    # add connection specifc properties to the consumer properties
+    consumer_properties.update(connection_properties)
+    # get the streams instance in IBM Cloud Pak for Data
+    cfg = icpd_util.get_service_instance_details(name='instanceName')
+    # create the application configuration
+    appconfig_name = configure_connection_from_properties(
+        instance=cfg,
+        name='kafkaConsumerProps',
+        properties=consumer_properties,
+        description='Consumer properties for authenticated access')
+    
+    messages = kafka.subscribe (topology, 'mytopic', appconfig_name, CommonSchema.String)
 
 Messages
 ++++++++
@@ -98,8 +143,14 @@ a topic and the same application consuming the same topic::
 
 """
 
+__version__='1.3.0'
 
-__version__='1.2.4'
-
-__all__ = ['subscribe', 'publish', 'configure_connection']
-from streamsx.kafka._kafka import subscribe, publish, configure_connection
+__all__ = [
+    'AuthMethod',
+    'create_connection_properties',
+    'configure_connection',
+    'configure_connection_from_properties',
+    'publish',
+    'subscribe'
+    ]
+from streamsx.kafka._kafka import AuthMethod, create_connection_properties, configure_connection, configure_connection_from_properties, publish, subscribe
