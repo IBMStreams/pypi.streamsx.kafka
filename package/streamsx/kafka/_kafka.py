@@ -21,6 +21,11 @@ import warnings
 import string
 import random
 from fileinput import filename
+import wget
+import requests
+import tarfile
+import shutil
+import re
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -54,6 +59,42 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
+
+def _download_tk(url, tmp_target_subdir, rel_toolkit_dir):
+    """Downloads and unpacks the toolkit.
+    
+    Args:
+        url(str): the download URL
+        tmp_target_subdir(str): the subdirectory relative to the temporary directory (/tmp), where the toolkit is unpacked to
+        rel_toolkit_dir(str): the toolkit directory in the archive (where toolkit.xml is located)
+    
+    Returns:
+        str: the absolute toolkit directory
+    """
+    targetdir = os.path.join(gettempdir(), tmp_target_subdir)
+    rnd = ''.join(random.choice(string.digits) for _ in range(10))
+    tmpfile = os.path.join(gettempdir(), 'toolkit-' + rnd + '.tgz')
+    if os.path.isdir(targetdir):
+        shutil.rmtree(targetdir)
+    if os.path.isfile(tmpfile):
+        os.remove(tmpfile)
+    wget.download(url, tmpfile)
+    tar = tarfile.open(tmpfile, "r:gz")
+    tar.extractall(path=targetdir)
+    tar.close()
+    toolkit_path = os.path.join(targetdir, rel_toolkit_dir)
+    tkfile = os.path.join(toolkit_path, 'toolkit.xml')
+    if os.path.isfile(tkfile):
+        f = open(tkfile, "r")
+        for x in f:
+            if 'toolkit name' in x:
+                version_dump = re.sub(r' requiredProductVersion="[^ ]*"', '', x)
+                print('\n' + version_dump)
+                break
+        f.close()
+    if os.path.isfile(tmpfile):
+        os.remove(tmpfile)
+    return toolkit_path
 
 
 def _try_read_from_file (potential_filename):
@@ -225,6 +266,54 @@ def _add_properties_file(topology, properties, file_name):
     return fName
 
 
+def download_toolkit(url=None, name=None):
+    r"""Downloads the latest Kafka toolkit from GitHub.
+
+    Example for updating the Kafka toolkit for your topology with the latest toolkit from GitHub::
+
+        import streamsx.kafka as kafka
+        # download Kafka toolkit from GitHub
+        kafka_toolkit_location = kafka.download_toolkit()
+        # add the toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topology, kafka_toolkit_location)
+
+    Example for updating the topology with a specific version of the Kafka toolkit using an URL::
+
+        import streamsx.kafka as kafka
+        url201 = 'https://github.com/IBMStreams/streamsx.kafka/releases/download/v2.0.1/com.ibm.streamsx.kafka-2.0.1.tgz'
+        kafka_toolkit_location = kafka.download_toolkit(url=url201)
+        streamsx.spl.toolkit.add_toolkit(topology, kafka_toolkit_location)
+
+    Args:
+        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
+            download a specific version of the toolkit.
+        name(str): Folder name in temporary directory where to extract the downloaded toolkit
+
+    Returns:
+        str: the location of the downloaded Kafka toolkit
+
+    .. note:: This function requires an outgoing Internet connection
+    .. versionadded:: 1.3
+    """
+    if name is None:
+        dirname = _TOOLKIT_NAME
+    else:    
+        dirname = name
+    if url is None:
+        # get latest toolkit
+        r = requests.get('https://github.com/IBMStreams/streamsx.kafka/releases/latest')
+        r.raise_for_status()
+        if r.text is not None:
+            s = re.search(r'/IBMStreams/streamsx.kafka/releases/download/.*tgz', r.text).group()
+            url = 'https://github.com/' + s
+    if url is None:
+        raise ValueError("Invalid URL")
+    else:
+        print('Download: ' + url)
+        toolkit_loc = _download_tk(url, dirname, 'com.ibm.streamsx.kafka')
+    return toolkit_loc
+
+
 def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None, enable_hostname_verification = True):
     """Configures IBM Streams for a connection with a Kafka broker.
 
@@ -248,7 +337,6 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
         instance = Instance.of_service(cfg)
         bootstrap_servers = 'kafka-server-1.domain:9093,kafka-server-2.domain:9093,kafka-server-3.domain:9093'
         app_cfg_name = configure_connection(instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
-
 
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
@@ -485,8 +573,10 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
     .. note:: When certificates are needed, this function can be used only with 
         the **streamsx.kafka** toolkit version 1.9.2 and higher.
         The function will add a toolkit dependency to the topology.
+        When the toolkit dependency cannot be satisfied, use a newer toolkit version.
+        A newer version of the toolkit can be downloaded from GitHub with :func:`download_toolkit`.
     .. warning:: The returned properties can contain sensitive data. Storing the properties in
-        an application configuration is a good idea to avoid exposing sensitive informsation.
+        an application configuration is a good idea to avoid exposing sensitive information.
         On IBM Cloud Pak for Data use :func:`configure_connection_from_properties` to do this.
         
     .. versionadded:: 1.3

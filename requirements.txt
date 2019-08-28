@@ -1,3 +1,4 @@
 streamsx>=1.12.10
 pyOpenSSL==19.0.0
 pyJKS==19.0.0
+wget

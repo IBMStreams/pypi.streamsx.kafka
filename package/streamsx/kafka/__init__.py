@@ -26,12 +26,14 @@ The minimum set of properties in the application configuration or dictionary con
 
 Other configs for Kafka consumers or Kafka producers can be added to the application configuration or dictionary.
 When configurations are specified, which are specific for consumers or producers only, it is recommended
-to use different application configurations or variables of dict type for :py:func:`publish <publish>` and :py:func:`subscribe <subscribe>`.
+to use different application configurations or variables of dict type for :py:func:`publish <publish>` 
+and :py:func:`subscribe <subscribe>`.
 
 The consumer and producer configs can be found in the `Kafka documentation <https://kafka.apache.org/documentation/>`_.
  
 Please note, that the underlying SPL toolkit already adjusts several configurations.
-Please contact the `toolkit operator reference <https://ibmstreams.github.io/streamsx.kafka/doc/spldoc/html/>`_.
+Please review the `toolkit operator reference <https://ibmstreams.github.io/streamsx.kafka/doc/spldoc/html/>`_ 
+for defaults and adjusted configurations.
 
 Simple connection parameter example::
 
@@ -48,7 +50,7 @@ Simple connection parameter example::
 
 When trusted certificates, or client certificates, and private keys are required to connect with a Kafka cluster,
 the function :py:func:`create_connection_properties <create_connection_properties>` helps to create stores for
-certificates and keys, and creates the right properties.
+certificates and keys, and to create the right properties.
 
 In IBM Cloud Pak for Data it is also possible to create application configurations for consumer and 
 producer properties. An application configuration is a safe place to store sensitive data. Use the
@@ -145,12 +147,14 @@ a topic and the same application consuming the same topic::
 
 __version__='1.3.0'
 
+# controls sphinx documentation:
 __all__ = [
     'AuthMethod',
+    'download_toolkit',
     'create_connection_properties',
     'configure_connection',
     'configure_connection_from_properties',
     'publish',
     'subscribe'
     ]
-from streamsx.kafka._kafka import AuthMethod, create_connection_properties, configure_connection, configure_connection_from_properties, publish, subscribe
+from streamsx.kafka._kafka import AuthMethod, create_connection_properties, configure_connection, configure_connection_from_properties, publish, subscribe, download_toolkit
