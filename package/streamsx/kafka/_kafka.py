@@ -582,7 +582,7 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
     .. versionadded:: 1.3
     """
     if bootstrap_servers is None:
-        raise ValueError ('bootstrap_servers must not be None')
+        raise TypeError ('bootstrap_servers must not be None')
     _auth = authentication
     if _auth is None:
         _auth = AuthMethod.NONE
