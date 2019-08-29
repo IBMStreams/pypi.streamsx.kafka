@@ -60,18 +60,19 @@ class AuthMethod(Enum):
     .. versionadded:: 1.3
     """
 
-def _download_tk(url, tmp_target_subdir, rel_toolkit_dir):
+def _download_tk(url, target_dir, rel_toolkit_dir):
     """Downloads and unpacks the toolkit.
     
     Args:
         url(str): the download URL
-        tmp_target_subdir(str): the subdirectory relative to the temporary directory (/tmp), where the toolkit is unpacked to
+        target_dir(str): the directory where the toolkit is unpacked to. If it is a relative path,
+            it's relative to to the temporary directory (/tmp).
         rel_toolkit_dir(str): the toolkit directory in the archive (where toolkit.xml is located)
     
     Returns:
         str: the absolute toolkit directory
     """
-    targetdir = os.path.join(gettempdir(), tmp_target_subdir)
+    targetdir = os.path.join(gettempdir(), target_dir)
     rnd = ''.join(random.choice(string.digits) for _ in range(10))
     tmpfile = os.path.join(gettempdir(), 'toolkit-' + rnd + '.tgz')
     if os.path.isdir(targetdir):
@@ -82,6 +83,7 @@ def _download_tk(url, tmp_target_subdir, rel_toolkit_dir):
     tar = tarfile.open(tmpfile, "r:gz")
     tar.extractall(path=targetdir)
     tar.close()
+    os.remove(tmpfile)
     toolkit_path = os.path.join(targetdir, rel_toolkit_dir)
     tkfile = os.path.join(toolkit_path, 'toolkit.xml')
     if os.path.isfile(tkfile):
@@ -287,7 +289,8 @@ def download_toolkit(url=None, name=None):
     Args:
         url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
             download a specific version of the toolkit.
-        name(str): Folder name in temporary directory where to extract the downloaded toolkit
+        name(str): the directory where the toolkit is unpacked to. If it is a relative path,
+            it is relative to to the system temporary directory, for example /tmp on Unix/Linux systems.
 
     Returns:
         str: the location of the downloaded Kafka toolkit

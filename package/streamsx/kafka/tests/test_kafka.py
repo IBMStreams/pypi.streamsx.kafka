@@ -18,7 +18,7 @@ import random
 import string
 from tempfile import gettempdir
 import glob
-
+import shutil
 
 ##
 ## Test assumptions
@@ -366,26 +366,43 @@ class TestCreateConnectionProperties(TestCase):
 
 
 class TestDownloadToolkit(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        # delete downloaded *.tgz (should be deleted in _download_toolkit(...)
+        for f in glob.glob(gettempdir() + '/toolkit-[0-9]*.tgz'):
+            try:
+                os.remove(f)
+                print ('file removed: ' + f)
+            except:
+                print('Error deleting file: ', f)
+        # delete unpacked toolkits
+        for d in glob.glob(gettempdir() + '/pypi.streamsx.kafka.tests-*'):
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+        for d in glob.glob(gettempdir() + '/com.ibm.streamsx.kafka'):
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+
     def test_download_latest(self):
         topology = Topology()
         location = kafka.download_toolkit()
-        streamsx.spl.toolkit.add_toolkit(topology, location)
         print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
 
     def test_download_with_url(self):
         topology = Topology()
         ver = '1.8.0'
         url = 'https://github.com/IBMStreams/streamsx.kafka/releases/download/v' + ver + '/com.ibm.streamsx.kafka-' + ver + '.tgz'
         location = kafka.download_toolkit(url=url)
-        streamsx.spl.toolkit.add_toolkit(topology, location)
         print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
 
     def test_download_latest_with_target_dir(self):
         topology = Topology()
         target_dir = 'pypi.streamsx.kafka.tests-' + str(uuid.uuid4()) + '/kafka-toolkit'
         location = kafka.download_toolkit(name=target_dir)
-        streamsx.spl.toolkit.add_toolkit(topology, location)
         print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
 
     def test_download_with_url_and_target_dir(self):
         topology = Topology()
@@ -393,8 +410,8 @@ class TestDownloadToolkit(TestCase):
         ver = '1.9.0'
         url = 'https://github.com/IBMStreams/streamsx.kafka/releases/download/v' + ver + '/com.ibm.streamsx.kafka-' + ver + '.tgz'
         location = kafka.download_toolkit(url=url, name=target_dir)
-        streamsx.spl.toolkit.add_toolkit(topology, location)
         print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
 
 
 ## Using a uuid to avoid concurrent test runs interferring
