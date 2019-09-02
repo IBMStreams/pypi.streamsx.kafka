@@ -21,11 +21,7 @@ import warnings
 import string
 import random
 from fileinput import filename
-import wget
-import requests
-import tarfile
-import shutil
-import re
+from streamsx.toolkits import download_toolkit
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -59,44 +55,6 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
-
-def _download_tk(url, target_dir, rel_toolkit_dir):
-    """Downloads and unpacks the toolkit.
-    
-    Args:
-        url(str): the download URL
-        target_dir(str): the directory where the toolkit is unpacked to. If it is a relative path,
-            it's relative to to the temporary directory (/tmp).
-        rel_toolkit_dir(str): the toolkit directory in the archive (where toolkit.xml is located)
-    
-    Returns:
-        str: the absolute toolkit directory
-    """
-    targetdir = os.path.join(gettempdir(), target_dir)
-    rnd = ''.join(random.choice(string.digits) for _ in range(10))
-    tmpfile = os.path.join(gettempdir(), 'toolkit-' + rnd + '.tgz')
-    if os.path.isdir(targetdir):
-        shutil.rmtree(targetdir)
-    if os.path.isfile(tmpfile):
-        os.remove(tmpfile)
-    wget.download(url, tmpfile)
-    tar = tarfile.open(tmpfile, "r:gz")
-    tar.extractall(path=targetdir)
-    tar.close()
-    os.remove(tmpfile)
-    toolkit_path = os.path.join(targetdir, rel_toolkit_dir)
-    tkfile = os.path.join(toolkit_path, 'toolkit.xml')
-    if os.path.isfile(tkfile):
-        f = open(tkfile, "r")
-        for x in f:
-            if 'toolkit name' in x:
-                version_dump = re.sub(r' requiredProductVersion="[^ ]*"', '', x)
-                print('\n' + version_dump)
-                break
-        f.close()
-    if os.path.isfile(tmpfile):
-        os.remove(tmpfile)
-    return toolkit_path
 
 
 def _try_read_from_file (potential_filename):
@@ -298,23 +256,8 @@ def download_toolkit(url=None, name=None):
     .. note:: This function requires an outgoing Internet connection
     .. versionadded:: 1.3
     """
-    if name is None:
-        dirname = _TOOLKIT_NAME
-    else:    
-        dirname = name
-    if url is None:
-        # get latest toolkit
-        r = requests.get('https://github.com/IBMStreams/streamsx.kafka/releases/latest')
-        r.raise_for_status()
-        if r.text is not None:
-            s = re.search(r'/IBMStreams/streamsx.kafka/releases/download/.*tgz', r.text).group()
-            url = 'https://github.com/' + s
-    if url is None:
-        raise ValueError("Invalid URL")
-    else:
-        print('Download: ' + url)
-        toolkit_loc = _download_tk(url, dirname, 'com.ibm.streamsx.kafka')
-    return toolkit_loc
+    _toolkit_location = streamsx.toolkits.download_toolkit (toolkit_name=_TOOLKIT_NAME, url=url, target_dir=name)
+    return _toolkit_location
 
 
 def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None, enable_hostname_verification = True):
