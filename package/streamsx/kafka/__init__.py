@@ -63,6 +63,9 @@ Example with use of an application configuration::
     
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
+    from streamsx.rest import Instance
+    import streamsx.topology.context
+
     import streamsx.kafka as kafka
     
     topology = Topology('ConsumeFromKafka')
@@ -83,10 +86,13 @@ Example with use of an application configuration::
     # add connection specifc properties to the consumer properties
     consumer_properties.update(connection_properties)
     # get the streams instance in IBM Cloud Pak for Data
-    cfg = icpd_util.get_service_instance_details(name='instanceName')
+    instance_cfg = icpd_util.get_service_instance_details(name='instanceName')
+    instance_cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+    streams_instance = Instance.of_service(instance_cfg)
+
     # create the application configuration
     appconfig_name = configure_connection_from_properties(
-        instance=cfg,
+        instance=streams_instance,
         name='kafkaConsumerProps',
         properties=consumer_properties,
         description='Consumer properties for authenticated access')
@@ -145,7 +151,7 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.4.0'
+__version__='1.4.1'
 
 # controls sphinx documentation:
 __all__ = [

@@ -275,7 +275,7 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
     Example for creating a configuration for a Streams instance with connection details::
 
 
-        streamsx.rest import Instance
+        from streamsx.rest import Instance
         import streamsx.topology.context
         from icpd_core import icpd_util
         
@@ -343,6 +343,20 @@ def configure_connection_from_properties(instance, name, properties, description
     dictionary. The keys must be valid 
     `consumer <https://kafka.apache.org/22/documentation/#consumerconfigs>`_ 
     or `producer configurations <https://kafka.apache.org/22/documentation/#producerconfigs>`_.
+
+    Example for creating a configuration for a Streams instance with connection details::
+
+        from streamsx.rest import Instance
+        import streamsx.topology.context
+        from streamsx.kafka import create_connection_properties, configure_connection
+        from icpd_core import icpd_util
+        
+        cfg = icpd_util.get_service_instance_details(name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service(cfg)
+        bootstrap_servers = 'kafka-server-1.domain:9093,kafka-server-2.domain:9093,kafka-server-3.domain:9093'
+        consumer_properties = create_connection_properties (bootstrap_servers = bootstrap_servers)
+        app_cfg_name = configure_connection_from_properties(instance, 'my_app_cfg1', consumer_properties, 'KafkaConsumerConfig')
 
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
