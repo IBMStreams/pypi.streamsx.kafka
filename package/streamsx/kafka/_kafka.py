@@ -81,7 +81,7 @@ def _try_read_from_file (potential_filename):
 #        print ("using data literally")
     if not '---BEGIN' in _data:
         warnings.warn('Certificate or key data does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
-    return _data
+    return _data.strip()
 
 def _generate_password(len=16):
     return ''.join(random.choice(string.ascii_uppercase + string.digits + string.ascii_lowercase) for _ in range(len))
@@ -89,6 +89,15 @@ def _generate_password(len=16):
 
 def _generate_store_suffix(len=10):
     return ''.join(random.choice(string.digits) for _ in range(10))
+
+def _test_dsx_dataset_dir_and_get(default_dir):
+    if 'DSX_PROJECT_DIR' in os.environ:
+        _dsxdir = os.environ['DSX_PROJECT_DIR'].strip()
+        if _dsxdir:
+            _dir = _dsxdir + '/datasets'
+            if os.path.isdir(_dir):
+                return _dir
+    return default_dir
 
 
 def _create_keystore_properties(client_cert, client_private_key, store_passwd=None, store_suffix=None, topology=None):
@@ -112,6 +121,8 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_store_suffix()
+    else:
+        _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
     if _passwd is None:
         _passwd = _generate_password()
@@ -124,7 +135,11 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     if privateKeyEntry.is_decrypted():
         privateKeyEntry.encrypt(_passwd)
     keystore = jks.KeyStore.new('jks', [privateKeyEntry])
-    _store_filename = 'keystore-' + _storeSuffix + '.jks'
+    # an empty string evaluates to False
+    if _storeSuffix:
+        _store_filename = 'keystore-' + _storeSuffix + '.jks'
+    else:
+        _store_filename = 'keystore.jks'
     if topology is None:
         # save the keystore in current directory
         filename = _store_filename
@@ -132,7 +147,8 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
         print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        filename = os.path.join(gettempdir(), _store_filename)
+        _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+        filename = os.path.join(_dir, _store_filename)
         keystore.save(filename, _passwd)
         print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
         topology.add_file_dependency(filename, 'etc')
@@ -152,7 +168,7 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     the required properties to use a truststore.
 
     Args:
-        trusted_cert(str): the filename with a trusted certificate in PEM format or the certificate itself
+        trusted_cert(list|str): a list of filenames with trusted certificates in PEM format or the certificates themselves
         store_passwd(str): the password for the keystore. When None, a password is generated.
         store_suffix(str): A suffix for the keystore file name. The filename will be ``'truststore-<suffix>.jks'``.
             If the suffix is None, a suffix will be generated.
@@ -162,18 +178,42 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     Returns:
         dict: A set of truststore relevant properties. They can be used for consumers and producers.
     """
-    _ca_cert_pem = _try_read_from_file(trusted_cert)
+    if isinstance(trusted_cert, str):
+        _cert_list = [trusted_cert]
+    elif isinstance(trusted_cert, list):
+        # must not be empty
+        if trusted_cert:
+            _cert_list = trusted_cert
+        else:
+            raise ValueError('trusted_cert must not be an empty list')
+    else:
+        raise TypeError('trusted_cert must be of str or list type')
+    
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_store_suffix()
+    else:
+        _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
     if _passwd is None:
         _passwd = _generate_password()
-    _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_ca_cert_pem, 'utf-8'))
-    _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
-    caCrtEntry = jks.TrustedCertEntry.new ("root_ca_cert", _ca_cert_der)
-    keystore = jks.KeyStore.new('jks', [caCrtEntry])
-    _store_filename = 'truststore-' + _storeSuffix + '.jks'
+    _storeEntries = list()
+    i = 0
+    for _crt in _cert_list:
+        _ca_cert_pem = _try_read_from_file(_crt)
+        _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_ca_cert_pem, 'utf-8'))
+        _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
+        _alias = 'ca_cert-' + str(i)
+        _store_entry = jks.TrustedCertEntry.new (_alias, _ca_cert_der)
+        _storeEntries.append(_store_entry)
+        i = i + 1
+
+    keystore = jks.KeyStore.new('jks', _storeEntries)
+    # an empty string evaluates to False
+    if _storeSuffix:
+        _store_filename = 'truststore-' + _storeSuffix + '.jks'
+    else:
+        _store_filename = 'truststore.jks'
     if topology is None:
         # save the keystore in current directory
         filename = _store_filename
@@ -181,7 +221,8 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
         print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        filename = os.path.join(gettempdir(), _store_filename)
+        _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+        filename = os.path.join(_dir, _store_filename)
         keystore.save(filename, _passwd)
         print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
         topology.add_file_dependency(filename, 'etc')
@@ -200,9 +241,9 @@ def _add_properties_file(topology, properties, file_name):
     Adds properties as a dictionary as a file dependency to the topology
 
     Args:
-        topology(Topology): the topology
-        properties(dict):   the Kafka properties
-        file_name(str):     the filename of the file dependency
+        topology(Topology):     the topology
+        properties(dict):       the Kafka properties
+        file_name(str):         the filename of the file dependency
 
     Returns:
         str: 'etc/' + file_name
@@ -466,10 +507,12 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
             
             The parameter is ignored when **use_TLS** is ``False``.
             
-        cluster_ca_cert(str): The CA certificate of the broker certificates. This certificate is 
+        cluster_ca_cert(str|list): The CA certificate of the broker certificates or a list of them. This certificate is 
             required when the cluster does not use certificates signed by a public CA authority.
-            The parameter must be the name of an existing PEM formatted file or the PEM formatted certificate itself.
-            The cluster CA certificate must have a text format like this::
+            The parameter must be the name of an existing PEM formatted file or the PEM formatted certificate itself, 
+            or a list of filenames or PEM strings. These certificates are treated as trusted and go into a truststore.
+            
+            A trusted certificate must have a text format like this::
             
                 -----BEGIN CERTIFICATE-----
                 ...
@@ -506,9 +549,9 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
             
             The parameter is ignored when **authentication** is not 'TLS'.
             
-        client_private_key(str): The private part of the key pair on which the client certificate is based.
+        client_private_key(str): The private part of the RSA key pair on which the client certificate is based.
             The parameter must be the name of an existing PEM formatted file or the PEM 
-            formatted certificate itself. The private key must have a text format like this::
+            formatted key itself. The private key must have a text format like this::
             
                 -----BEGIN PRIVATE KEY-----
                 ...
@@ -587,7 +630,11 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
         props['sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="' + username + '" password="' + password + '";'
     elif _auth == AuthMethod.TLS:
         props['security.protocol'] = 'SSL'
-        props.update(_create_keystore_properties(client_cert, client_private_key, _storePasswd, _storeSuffix, topology))
+        props.update(_create_keystore_properties(client_cert,
+                                                 client_private_key,
+                                                 _storePasswd,
+                                                 _storeSuffix,
+                                                 topology))
     elif _auth == AuthMethod.SCRAM_SHA_512:
         props['security.protocol'] = 'SASL_SSL' if use_TLS else 'SASL_PLAINTEXT'
         props['sasl.mechanism'] = 'SCRAM-SHA-512'
@@ -597,8 +644,11 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
 
     if use_TLS:
         props['ssl.endpoint.identification.algorithm'] = 'https' if enable_hostname_verification else ''
-        if not cluster_ca_cert is None:
-            props.update(_create_truststore_properties(cluster_ca_cert, _storePasswd, _storeSuffix, topology))
+        if cluster_ca_cert:
+            props.update(_create_truststore_properties(cluster_ca_cert,
+                                                       _storePasswd,
+                                                       _storeSuffix,
+                                                       topology))
     return props
 
 

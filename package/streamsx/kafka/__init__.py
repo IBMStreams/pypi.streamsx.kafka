@@ -151,7 +151,7 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.4.1'
+__version__='1.5.0'
 
 # controls sphinx documentation:
 __all__ = [

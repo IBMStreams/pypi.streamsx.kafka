@@ -19,6 +19,7 @@ import string
 from tempfile import gettempdir
 import glob
 import shutil
+from posix import remove
 
 ##
 ## Test assumptions
@@ -123,12 +124,15 @@ class TestPublishParams(TestCase):
 class TestCreateConnectionProperties(TestCase):
     def setUp(self):
         self.ca_crt_file = _write_text_file (TRUSTED_CERT_PEM)
+        self.client_ca_crt_file = _write_text_file (CLIENT_CA_CERT_PEM)
         self.client_crt_file = _write_text_file (CLIENT_CERT_PEM)
         self.private_key_file = _write_text_file (PRIVATE_KEY_PEM)
     
     def tearDown(self):
         if os.path.isfile(self.ca_crt_file):
             os.remove(self.ca_crt_file)
+        if os.path.isfile(self.client_ca_crt_file):
+            os.remove(self.client_ca_crt_file)
         if os.path.isfile(self.client_crt_file):
             os.remove(self.client_crt_file)
         if os.path.isfile(self.private_key_file):
@@ -138,7 +142,7 @@ class TestCreateConnectionProperties(TestCase):
             for f in glob.glob(os.path.join(gettempdir(), storetype) + '-*.jks'):
                 try:
                     os.remove(f)
-#                    print ('file removed: ' + f)
+                    #print ('file removed: ' + f)
                 except:
                     print('Error deleting file: ', f)
 
@@ -172,6 +176,7 @@ class TestCreateConnectionProperties(TestCase):
                           authentication=kafka.AuthMethod.PLAIN, password='passwd')
         self.assertRaises(ValueError, kafka.create_connection_properties, bootstrap_servers='host:9',
                           authentication=kafka.AuthMethod.SCRAM_SHA_512, password='passwd')
+        
     
     def test_plaintext_None_auth(self):
         props = kafka.create_connection_properties (bootstrap_servers='host:9', use_TLS=False, authentication=None)
@@ -189,6 +194,43 @@ class TestCreateConnectionProperties(TestCase):
                                      'security.protocol': 'SSL',
                                      'ssl.endpoint.identification.algorithm': ''
                                      })
+        
+    def test_tls_ca_list_noauth(self):
+        t = Topology('test_props')
+        props = kafka.create_connection_properties (bootstrap_servers='host:9', 
+                                                    cluster_ca_cert=[TRUSTED_CERT_PEM, CLIENT_CA_CERT_PEM],
+                                                    enable_hostname_verification=True,
+                                                    topology=t)
+        self.assertSetEqual(set(props), set({'bootstrap.servers': 'host:9',
+                                             'security.protocol': 'SSL',
+                                             'ssl.endpoint.identification.algorithm': 'https',
+                                             'ssl.truststore.location': '{applicationDir}/etc/truststore-RANDOM_TOKEN.jks',
+                                             'ssl.truststore.password': '__RANDOM_PASSWORD__',
+                                             'ssl.truststore.type': 'JKS'
+                                             }))
+        
+    def test_tls_ca_empty_list_noauth(self):
+        t = Topology('test_props')
+        props = kafka.create_connection_properties (bootstrap_servers='host:9', 
+                                                    cluster_ca_cert=[],
+                                                    enable_hostname_verification=True,
+                                                    topology=t)
+        self.assertDictEqual(props, {'bootstrap.servers': 'host:9',
+                                     'security.protocol': 'SSL',
+                                     'ssl.endpoint.identification.algorithm': 'https'
+                                     })
+        
+    def test_tls_ca_empty_string_noauth(self):
+        t = Topology('test_props')
+        props = kafka.create_connection_properties (bootstrap_servers='host:9', 
+                                                    cluster_ca_cert='',
+                                                    enable_hostname_verification=True,
+                                                    topology=t)
+        self.assertDictEqual(props, {'bootstrap.servers': 'host:9',
+                                     'security.protocol': 'SSL',
+                                     'ssl.endpoint.identification.algorithm': 'https'
+                                     })
+
     def test_tls_ca_noauth(self):
         t = Topology('test_props')
         props = kafka.create_connection_properties (bootstrap_servers='host:9', 
