@@ -19,6 +19,7 @@ import string
 from tempfile import gettempdir
 import glob
 import shutil
+from posix import remove
 
 ##
 ## Test assumptions
@@ -138,7 +139,7 @@ class TestCreateConnectionProperties(TestCase):
             for f in glob.glob(os.path.join(gettempdir(), storetype) + '-*.jks'):
                 try:
                     os.remove(f)
-#                    print ('file removed: ' + f)
+                    #print ('file removed: ' + f)
                 except:
                     print('Error deleting file: ', f)
 
@@ -210,7 +211,8 @@ class TestCreateConnectionProperties(TestCase):
                                                     authentication=kafka.AuthMethod.TLS,
                                                     client_cert=CLIENT_CERT_PEM,
                                                     client_private_key=PRIVATE_KEY_PEM,
-                                                    topology=t)
+                                                    topology=t,
+                                                    remove_temp_files=False)
         self.assertSetEqual(set(props), set({'bootstrap.servers': 'host:9',
                                              'security.protocol': 'SSL',
                                              'ssl.endpoint.identification.algorithm': 'https',

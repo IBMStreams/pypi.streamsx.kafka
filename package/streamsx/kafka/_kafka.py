@@ -90,8 +90,17 @@ def _generate_password(len=16):
 def _generate_store_suffix(len=10):
     return ''.join(random.choice(string.digits) for _ in range(10))
 
+def _test_dsx_dataset_dir_and_get(default_dir):
+    if 'DSX_PROJECT_DIR' in os.environ:
+        _dsxdir = os.environ['DSX_PROJECT_DIR'].strip()
+        if _dsxdir:
+            _dir = _dsxdir + '/datasets'
+            if os.path.isdir(_dir):
+                return _dir
+    return default_dir
 
-def _create_keystore_properties(client_cert, client_private_key, store_passwd=None, store_suffix=None, topology=None):
+
+def _create_keystore_properties(client_cert, client_private_key, store_passwd=None, store_suffix=None, topology=None, remove_temp_file=True):
     """Creates a keystore, adds it as file dependency to the topology, and creates
     the required properties to use a keystore.
 
@@ -103,6 +112,8 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
             If the suffix is None, a suffix will be generated.
         topology(Topology): the topology to which the keystore is added as file dependency in 'etc' directory.
             If None, the key store file is generated in current working directory and not added to a topology.
+        remove_temp_file(bool): Controls if the keystore file is removed after adding it as a file dependency to the topology.
+            When topology is None, the parameter is ignored, and the keystore file is not deleted.
 
     Returns:
         dict: A set of keystore relevant properties. They can be used for consumers and producers.
@@ -112,6 +123,8 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_store_suffix()
+    else:
+        _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
     if _passwd is None:
         _passwd = _generate_password()
@@ -124,7 +137,11 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     if privateKeyEntry.is_decrypted():
         privateKeyEntry.encrypt(_passwd)
     keystore = jks.KeyStore.new('jks', [privateKeyEntry])
-    _store_filename = 'keystore-' + _storeSuffix + '.jks'
+    # an empty string evaluates to False
+    if _storeSuffix:
+        _store_filename = 'keystore-' + _storeSuffix + '.jks'
+    else:
+        _store_filename = 'keystore.jks'
     if topology is None:
         # save the keystore in current directory
         filename = _store_filename
@@ -132,10 +149,14 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
         print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        filename = os.path.join(gettempdir(), _store_filename)
+        _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+        filename = os.path.join(_dir, _store_filename)
         keystore.save(filename, _passwd)
-        print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
         topology.add_file_dependency(filename, 'etc')
+        if remove_temp_file:
+            os.remove (filename)
+        else:
+            print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
         fName = 'etc/' + _store_filename
         print("Keystore file " + fName + " added to the topology " + topology.name)
     
@@ -147,7 +168,7 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     return _props
 
 
-def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=None, topology=None):
+def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=None, topology=None, remove_temp_file=True):
     """Creates a keystore, adds it as file dependency to the topology, and creates 
     the required properties to use a truststore.
 
@@ -158,6 +179,8 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
             If the suffix is None, a suffix will be generated.
         topology(Topology): the topology to which the keystore is added as file dependency in 'etc' directory.
             If None, the key store file is generated in current working directory and not added to a topology.
+        remove_temp_file(bool): Controls if truststore file is removed after adding it as a file dependency to the topology.
+            When topology is None, the parameter is ignored, and the truststore file is not deleted.
 
     Returns:
         dict: A set of truststore relevant properties. They can be used for consumers and producers.
@@ -166,6 +189,8 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_store_suffix()
+    else:
+        _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
     if _passwd is None:
         _passwd = _generate_password()
@@ -173,7 +198,11 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
     caCrtEntry = jks.TrustedCertEntry.new ("root_ca_cert", _ca_cert_der)
     keystore = jks.KeyStore.new('jks', [caCrtEntry])
-    _store_filename = 'truststore-' + _storeSuffix + '.jks'
+    # an empty string evaluates to False
+    if _storeSuffix:
+        _store_filename = 'truststore-' + _storeSuffix + '.jks'
+    else:
+        _store_filename = 'truststore.jks'
     if topology is None:
         # save the keystore in current directory
         filename = _store_filename
@@ -181,10 +210,14 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
         print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        filename = os.path.join(gettempdir(), _store_filename)
+        _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+        filename = os.path.join(_dir, _store_filename)
         keystore.save(filename, _passwd)
-        print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
         topology.add_file_dependency(filename, 'etc')
+        if remove_temp_file:
+            os.remove (filename)
+        else:
+            print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
         fName = 'etc/' + _store_filename
         print("Truststore file " + fName + " added to the topology " + topology.name)
     
@@ -195,14 +228,15 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     return _props
 
 
-def _add_properties_file(topology, properties, file_name):
+def _add_properties_file(topology, properties, file_name, remove_temp_file=True):
     """
     Adds properties as a dictionary as a file dependency to the topology
 
     Args:
-        topology(Topology): the topology
-        properties(dict):   the Kafka properties
-        file_name(str):     the filename of the file dependency
+        topology(Topology):     the topology
+        properties(dict):       the Kafka properties
+        file_name(str):         the filename of the file dependency
+        remove_temp_file(bool): Set to False to preserve the temporarily generated property file
 
     Returns:
         str: 'etc/' + file_name
@@ -221,6 +255,8 @@ def _add_properties_file(topology, properties, file_name):
         properties_file.close()
     print('properties file ' + tmpfile + ' generated.')
     topology.add_file_dependency(tmpfile, 'etc')
+    if remove_temp_file:
+        os.remove(tmpfile)
     fName = 'etc/' + file_name
     print("Properties file " + fName + " added to the topology " + topology.name)
     return fName
@@ -399,7 +435,7 @@ def configure_connection_from_properties(instance, name, properties, description
 
 def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostname_verification=True,
                     cluster_ca_cert=None, authentication=AuthMethod.NONE, 
-                    client_cert=None, client_private_key=None, username=None, password=None, topology=None):
+                    client_cert=None, client_private_key=None, username=None, password=None, topology=None, remove_temp_files=True):
     """Create Kafka properties that can be used to connect a consumer or a producer with a Kafka cluster
     when certificates and keys or authentication is required. The resulting properties can be used
     for example in :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
@@ -527,6 +563,10 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
             the created Kafka properties are used. The parameter must not be
             None when one of the parameters **cluster_ca_cert**, **client_cert**, 
             or **client_private_key** is not ``None``.
+
+        remove_temp_files(bool):  When ``True`` (default), keystore and truststore files
+            are deleted after they have been added as file dependencies. Use ``False``
+            when you want to preserve the files for later use.
             
     Returns:
         dict: Kafka properties 
@@ -587,7 +627,12 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
         props['sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="' + username + '" password="' + password + '";'
     elif _auth == AuthMethod.TLS:
         props['security.protocol'] = 'SSL'
-        props.update(_create_keystore_properties(client_cert, client_private_key, _storePasswd, _storeSuffix, topology))
+        props.update(_create_keystore_properties(client_cert,
+                                                 client_private_key,
+                                                 _storePasswd,
+                                                 _storeSuffix,
+                                                 topology,
+                                                 remove_temp_files))
     elif _auth == AuthMethod.SCRAM_SHA_512:
         props['security.protocol'] = 'SASL_SSL' if use_TLS else 'SASL_PLAINTEXT'
         props['sasl.mechanism'] = 'SCRAM-SHA-512'
@@ -598,7 +643,11 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
     if use_TLS:
         props['ssl.endpoint.identification.algorithm'] = 'https' if enable_hostname_verification else ''
         if not cluster_ca_cert is None:
-            props.update(_create_truststore_properties(cluster_ca_cert, _storePasswd, _storeSuffix, topology))
+            props.update(_create_truststore_properties(cluster_ca_cert,
+                                                       _storePasswd,
+                                                       _storeSuffix,
+                                                       topology,
+                                                       remove_temp_files))
     return props
 
 
