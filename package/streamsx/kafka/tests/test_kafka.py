@@ -1,7 +1,11 @@
+# coding=utf-8
+# Licensed Materials - Property of IBM
+# Copyright IBM Corp. 2019
+
 from unittest import TestCase
 
 import streamsx.kafka as kafka
-from streamsx.kafka.tests.x509_certs import *
+from streamsx.kafka.tests.x509_certs import TRUSTED_CERT_PEM, PRIVATE_KEY_PEM, CLIENT_CERT_PEM, CLIENT_CA_CERT_PEM
 
 from streamsx.topology.topology import Topology
 from streamsx.topology.tester import Tester
