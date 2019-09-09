@@ -1,3 +1,7 @@
+# coding=utf-8
+# Licensed Materials - Property of IBM
+# Copyright IBM Corp. 2019
+
 # Note: These certificates may be expired and may be invalid. 
 PRIVATE_KEY_PEM = """
 -----BEGIN PRIVATE KEY-----
