@@ -62,6 +62,10 @@ Following environment variables must be set:
 The Streams runtime must be aware of the `PYTHONHOME` variable. The variable must be made
 available to the runtime by using following *streamtool* command:
 
+Uninstall the streamsx.kafka package from your Python environment before test:
+
+`pip uninstall streamsx.kafka --yes`
+
 ```
 streamtool setproperty --application-ev PYTHONHOME=path_to_python_install
 ```
