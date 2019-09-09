@@ -59,12 +59,12 @@ Following environment variables must be set:
 | KAFKA_TOOLKIT_HOME | The directory where the Kafka toolkit is located |
 | KAFKA_PROPERTIES | The name of a properties file with consumer properties |
 
-The Streams runtime must be aware of the `PYTHONHOME` variable. The variable must be made
-available to the runtime by using following *streamtool* command:
-
 Uninstall the streamsx.kafka package from your Python environment before test:
 
 `pip uninstall streamsx.kafka --yes`
+
+The Streams runtime must be aware of the `PYTHONHOME` variable. The variable must be made
+available to the runtime by using following *streamtool* command:
 
 ```
 streamtool setproperty --application-ev PYTHONHOME=path_to_python_install
