@@ -427,8 +427,11 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
         str: Name of the application configuration, i.e. the same value as given in the ``name`` parameter
 
     .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. deprecated:: 1.6.1
+        Use :func:`create_connection_properties` and :func:`configure_connection_from_properties`
     .. versionadded:: 1.1
     """
+    warnings.warn("Use 'create_connection_properties' and 'configure_connection_from_properties'", DeprecationWarning, stacklevel=2)
     if name is None:
         raise TypeError(name)
     if bootstrap_servers is None:
