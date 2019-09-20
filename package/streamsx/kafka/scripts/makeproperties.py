@@ -117,7 +117,7 @@ def _parse_args(args=None):
     conn_grp.add_argument('--trusted-cert', '-T', nargs='+', metavar='file', help='one or more paths to files with certificates in PEM format, which are trusted by the client')
 
     auth_grp = parser.add_argument_group(title='Authentication', description='options for client authentication')
-    auth_grp.add_argument('--auth', '-A', default='NONE', choices=['NONE', 'TLS', 'PLAIN', 'SCRAM-SHA-512'], help='authentication method')
+    auth_grp.add_argument('--auth', '-A', default='NONE', choices=['NONE', 'TLS', 'PLAIN', 'SCRAM-SHA-512'], help='authentication method, defaults to NONE')
     auth_grp.add_argument('--client-cert', '-C', metavar='file', help='path to a file that contains the client certificate in PEM format, required for TLS authentication')
     auth_grp.add_argument('--client-private-key', '-K', metavar='file', help='path to a file that contains the private key of the client certificate in PEM format, required for TLS authentication')
     auth_grp.add_argument('--username', '-U', help='user name, required for PLAIN and SCRAM-SHA-512 authentication')
@@ -158,8 +158,8 @@ def makeproperties(args=None):
                                                         username=cmd_args.username,
                                                         password=cmd_args.password,
                                                         store_dir=cmd_args.out_keystore_dir,
-                                                        store_pass=None,  # Python will generate a password
-                                                        store_suffix='')
+                                                        store_pass=None,   # Python will generate a password
+                                                        store_suffix=None) # Python creates a random suffix
     except OpenSSL.crypto.Error as e:
         print(traceback.format_exc(), file=sys.stderr)
         rc = 4
