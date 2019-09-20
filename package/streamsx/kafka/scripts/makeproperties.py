@@ -158,8 +158,8 @@ def makeproperties(args=None):
                                                         username=cmd_args.username,
                                                         password=cmd_args.password,
                                                         store_dir=cmd_args.out_keystore_dir,
-                                                        store_pass=None,  # Python will generate a password
-                                                        store_suffix='')
+                                                        store_pass=None,   # Python will generate a password
+                                                        store_suffix=None) # Python creates a random suffix
     except OpenSSL.crypto.Error as e:
         print(traceback.format_exc(), file=sys.stderr)
         rc = 4
