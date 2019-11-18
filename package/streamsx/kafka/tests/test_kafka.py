@@ -489,6 +489,9 @@ class StringData(object):
 def add_kafka_toolkit(topo):
     streamsx.spl.toolkit.add_toolkit(topo, os.environ["KAFKA_TOOLKIT_HOME"])
 
+def add_pip_toolkits(topo):
+    topo.add_pip_package('streamsx.toolkits')
+
 
 class TestKafka(TestCase):
     def setUp(self):
@@ -500,6 +503,7 @@ class TestKafka(TestCase):
         n = 104
         topo = Topology()
         add_kafka_toolkit(topo)
+        add_pip_toolkits(topo)
         uid = str(uuid.uuid4())
         s = topo.source(JsonData(uid, n)).as_json()
         kafka.publish(s, 'KAFKA_TEST', kafka_properties='kafkatest')
@@ -517,6 +521,7 @@ class TestKafka(TestCase):
         n = 107
         topo = Topology()
         add_kafka_toolkit(topo)
+        add_pip_toolkits(topo)
         uid = str(uuid.uuid4())
         s = topo.source(StringData(uid, n)).as_string()
         kafka.publish(s, 'KAFKA_TEST', kafka_properties = _get_properties (os.environ['KAFKA_PROPERTIES']))

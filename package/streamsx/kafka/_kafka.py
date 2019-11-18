@@ -82,8 +82,8 @@ def _generate_password(len=16):
     return ''.join(random.choice(string.ascii_uppercase + string.digits + string.ascii_lowercase) for _ in range(len))
 
 
-def _generate_store_suffix(len=10):
-    return ''.join(random.choice(string.digits) for _ in range(10))
+def _generate_random_digits(len=10):
+    return ''.join(random.choice(string.digits) for _ in range(len))
 
 def _test_dsx_dataset_dir_and_get(default_dir):
     if 'DSX_PROJECT_DIR' in os.environ:
@@ -116,7 +116,7 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     _client_key_pem = _try_read_from_file(client_private_key)
     _storeSuffix = store_suffix
     if _storeSuffix is None:
-        _storeSuffix = _generate_store_suffix()
+        _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
@@ -208,7 +208,7 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     
     _storeSuffix = store_suffix
     if _storeSuffix is None:
-        _storeSuffix = _generate_store_suffix()
+        _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
     _passwd = store_passwd
@@ -276,7 +276,7 @@ def _create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostna
         _storePasswd = _generate_password()
     _storeSuffix = store_suffix
     if _storeSuffix is None:
-        _storeSuffix = _generate_store_suffix()
+        _storeSuffix = _generate_random_digits()
     props['bootstrap.servers'] = bootstrap_servers
     if authentication == AuthMethod.NONE:
         if use_TLS:
@@ -762,9 +762,9 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
 
     if name is None:
         name = topic
-        fName = 'consumer-' + str(topic) + '.properties'
+        fName = 'consumer-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
     else:
-        fName = 'consumer-' + str(name) + '.' + str(topic) + '.properties'
+        fName = 'consumer-' + str(name) + '-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
 
     if isinstance(kafka_properties, dict):
         propsFilename = _add_properties_file(topology, kafka_properties, fName)
@@ -824,9 +824,9 @@ def publish(stream, topic, kafka_properties, name=None):
 
     if isinstance(kafka_properties, dict):
         if name is None:
-            fName = 'producer-' + str(topic) + '.properties'
+            fName = 'producer-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
         else:
-            fName = 'producer-' + str(name) + '.' + str(topic) + '.properties'
+            fName = 'producer-' + str(name) + '-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
         propsFilename = _add_properties_file(stream.topology, kafka_properties, fName)
         _op = _KafkaProducer(stream,
                              propertiesFile=propsFilename,
