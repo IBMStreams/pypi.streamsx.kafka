@@ -151,16 +151,17 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.6.2'
+__version__='1.7.0'
 
 # controls sphinx documentation:
 __all__ = [
     'AuthMethod',
     'download_toolkit',
     'create_connection_properties',
+    'create_connection_properties_for_eventstreams',
     'configure_connection',
     'configure_connection_from_properties',
     'publish',
     'subscribe'
     ]
-from streamsx.kafka._kafka import AuthMethod, create_connection_properties, configure_connection, configure_connection_from_properties, publish, subscribe, download_toolkit
+from streamsx.kafka._kafka import AuthMethod, create_connection_properties, create_connection_properties_for_eventstreams, configure_connection, configure_connection_from_properties, publish, subscribe, download_toolkit

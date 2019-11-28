@@ -534,3 +534,26 @@ class TestKafka(TestCase):
         tester.contents(r, expected)
         tester.tuple_count(r, n)
         tester.test(self.test_ctxtype, self.test_config)
+
+    def test_string_eventstreams_creds (self):
+        n = 107
+        topo = Topology()
+        add_kafka_toolkit(topo)
+        add_pip_toolkits(topo)
+        uid = str(uuid.uuid4())
+        s = topo.source(StringData(uid, n)).as_string()
+        kafka.publish(stream=s,
+                      topic='MH_TEST',
+                      kafka_properties=kafka.create_connection_properties_for_eventstreams (os.environ['EVENTSTREAMS_CREDENTIALS']))
+
+        r = kafka.subscribe(topology=topo,
+                            topic='MH_TEST',
+                            kafka_properties=kafka.create_connection_properties_for_eventstreams (os.environ['EVENTSTREAMS_CREDENTIALS']),
+                            schema=CommonSchema.String)
+        r = r.filter(lambda t : t.startswith(uid))
+        expected = list(StringData(uid, n, False)())
+
+        tester = Tester(topo)
+        tester.contents(r, expected)
+        tester.tuple_count(r, n)
+        tester.test(self.test_ctxtype, self.test_config)

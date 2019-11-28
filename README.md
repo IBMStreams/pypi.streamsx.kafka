@@ -51,13 +51,14 @@ When the documented sample must be changed, change it here:
 The tests are run with a locally installed Streams installation and any Kafka broker.
 Following environment variables must be set:
 
-| Enveironment variable | content |
+| Environment variable | content |
 | --- | --- |
 | STREAMS_INSTALL | must point to your Streams installation |
 | STREAMS_USERNAME | The username of the Streams user |
 | STREAMS_PASSWORD | The password of the Streams user |
 | KAFKA_TOOLKIT_HOME | The directory where the Kafka toolkit is located |
 | KAFKA_PROPERTIES | The name of a properties file with consumer properties |
+| EVENTSTREAMS_CREDENTIALS | The name of a JSON file with Event Streams service credentials |
 
 Uninstall the streamsx.kafka package from your Python environment before test:
 
@@ -79,6 +80,7 @@ configuration in it must be created anywhere in the file system and made be avai
 environmnet variable `KAFKA_PROPERTIES`.
 
 In the broker, a topic with name `KAFKA_TEST` with a single partition must be created.
+In event streams, a topic with name `MH_TEST` must be present.
 
 Run the tests with
 
