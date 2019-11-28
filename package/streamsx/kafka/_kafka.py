@@ -74,8 +74,6 @@ def _try_read_from_file (potential_filename):
 #            print ("data read from file " + _data)
 #    else:
 #        print ("using data literally")
-    if not '---BEGIN' in _data:
-        warnings.warn('Certificate or key data does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
     return _data.strip()
 
 def _generate_password(len=16):
@@ -113,7 +111,11 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
         dict: A set of keystore relevant properties. They can be used for consumers and producers.
     """
     _client_cert_pem = _try_read_from_file(client_cert)
+    if not '---BEGIN' in _client_cert_pem:
+        warnings.warn('client certificate ' + client_cert + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
     _client_key_pem = _try_read_from_file(client_private_key)
+    if not '---BEGIN' in _client_key_pem:
+        warnings.warn('client private key ' + client_private_key + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_random_digits()
@@ -218,6 +220,8 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     i = 0
     for _crt in _cert_list:
         _ca_cert_pem = _try_read_from_file(_crt)
+        if not '---BEGIN' in _ca_cert_pem:
+            warnings.warn('trusted certificate ' + _crt + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
         try:
             _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_ca_cert_pem, 'utf-8'))
             _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
@@ -524,6 +528,41 @@ def configure_connection_from_properties(instance, name, properties, description
     return name
 
 
+def create_connection_properties_for_eventstreams(credentials):
+    """Create Kafka configuration properties from service credentials for IBM event streams to connect 
+    with IBM event streams. The resulting properties can be used for example in 
+    :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
+    
+    Args:
+        credentials(dict|str): The service credentials for IBM event streams as a JSON dict or as string.
+            When a string is given, the parameter must be the name of an existing JSON file with credentials or 
+            must contain the raw JSON credentials.
+        
+    Returns:
+        dict: Kafka properties than contain the connection information. They can be used for both :func:`subscribe`, and :func:`publish`.
+        
+    .. warning:: The returned properties contain sensitive data. Storing the properties in
+        an application configuration is a good idea to avoid exposing sensitive information.
+        On IBM Cloud Pak for Data use :func:`configure_connection_from_properties` to do this.
+        
+    .. versionadded:: 1.7
+    """
+    if credentials is None:
+        raise TypeError(credentials)
+
+    if isinstance(credentials, str):
+        _creds = json.loads(_try_read_from_file(credentials))
+    else:
+        _creds = credentials
+    _cfg = dict()
+    _cfg['bootstrap.servers'] = ','.join(_creds['kafka_brokers_sasl'])
+    _cfg['sasl.mechanism'] = 'PLAIN'
+    _cfg['ssl.endpoint.identification.algorithm'] = 'https'
+    _cfg['security.protocol'] = 'SASL_SSL'
+    _cfg['sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="{}" password="{}";'.format (_creds['user'], _creds['password'])
+    return _cfg
+
+
 def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostname_verification=True,
                     cluster_ca_cert=None, authentication=AuthMethod.NONE, 
                     client_cert=None, client_private_key=None, username=None, password=None, topology=None):
@@ -729,7 +768,8 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
             Must not be ``None``.
         schema(StreamSchema): Schema for returned stream.
         group(str): Kafka consumer group identifier. When not specified it default to the
-            job name with ``topic`` appended separated by an underscore.
+            job name with ``topic`` appended separated by an underscore, so that all ``subscribe``
+            invocations within the topology to the same topic form a Kafka consumer group.
         name(str): Consumer name in the Streams context, defaults to a generated name.
 
     Returns:
