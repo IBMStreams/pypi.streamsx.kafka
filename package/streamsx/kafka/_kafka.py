@@ -3,6 +3,8 @@
 # Copyright IBM Corp. 2019
 import streamsx.spl.op
 import streamsx.spl.types
+from streamsx.topology.composite import Source as AbstractSource
+from streamsx.topology.composite import ForEach as AbstractSink
 from streamsx.topology.schema import CommonSchema
 import streamsx.spl.toolkit as tk
 
@@ -12,6 +14,7 @@ from tempfile import gettempdir
 import json
 from builtins import str
 from enum import Enum
+from typing import Optional
 import datetime
 import jks
 import OpenSSL
@@ -22,6 +25,7 @@ import string
 import random
 from fileinput import filename
 from streamsx.toolkits import download_toolkit
+from setuptools.command.egg_info import overwrite_arg
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -55,6 +59,600 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
+
+
+class KafkaConsumer(AbstractSource):
+    """Represents a source for messages read from Kafka, which can be passed to 
+    ``Topology.source()`` to create a stream.
+    
+    The minimum set properties that must be used contains
+    
+    - :attr:`consumer_config` or :attr:`app_config_name`
+    - :attr:`topic`
+    - :attr:`schema`
+    
+    A KafkaConsumer subscribes to one or more topics and can build a consumer 
+    group by setting :attr:`group_size` to a value greater than one. In this case,
+    the KafkaConsumer is the begin of a parallel region.
+    
+    The KafkaConsumer can also be the begin of a periodic consistent region::
+    
+        from streamsx.topology.state import ConsistentRegionConfig
+        from streamsx.topology.topology import Topology
+        from streamsx.kafka.schema import Schema
+        
+        consumer = KafkaConsumer()
+        consumer.topic = "myTopic"
+        consumer.consumer_config = {'bootstrap.servers': 'kafka-server.domain:9092'}
+        consumer.group_size = 3
+        consumer.group_id = "my-consumer-group"
+        consumer.schema = Schema.StringMessageMeta
+    
+        topology = Topology("KafkaConsumer")
+        cr_config = ConsistentRegionConfig(trigger=ConsistentRegionConfig.Trigger.PERIODIC, period=60)
+        from_kafka = topology.source(consumer, "SourceName").set_consistent(cr_config)
+
+    Operator driven consistent region is not supported by the KafkaConsumer.
+
+    .. since: 1.8.0
+    """
+    
+    def __init__(self):
+        self._vm_args = None
+        self._topic = None
+        self._schema = None
+        self._app_config_name = None
+        self._consumer_config = None
+        self._group_id = None
+        self._group_size = 1
+        self._client_id = None
+
+    @property
+    def vm_args(self):
+        """
+         str: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+        """
+        return self._vm_args
+
+    @vm_args.setter
+    def vm_args(self, vm_args):
+        self._vm_args = vm_args
+
+#    def set_vm_args(self, vm_args):
+#        """
+#        Sets arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
+#        
+#        Args:
+#            vm_args(str): Arguments given to the JVM
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.vm_args = vm_args
+#        return self
+
+    @property
+    def topic(self):
+        """
+        str|list: The topic or topics to subscribe::
+        
+            c1 = KafkaConsumer()
+            c1.topic = "SINGLE_TOPIC"
+            
+            # subscribe two topics
+            c2 = KafkaConsumer()
+            c2.topic = ["TOPIC_1", "TOPIC_2"]
+        
+        The topic or a list of topics is required.
+        """
+        return self._topic
+
+    @topic.setter
+    def topic(self, topic):
+        self._topic = topic
+
+#    def set_topic(self, topic):
+#        """
+#        Sets one or multiple topics to subscribe to.
+#        
+#        Args:
+#            topic(str|list): Topic or topics to subscribe messages from
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.topic = topic
+#        return self
+
+    @property
+    def schema(self):
+        """
+        streamsx.topology.schema.StreamSchema: The schema of the stream created by this source.
+        
+        Valid schemas are:
+        
+        * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
+        * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+        * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
+        * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
+        * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
+        * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+        
+        A schema is required.
+        """
+        return self._schema
+
+    @schema.setter
+    def schema(self, schema):
+        self._schema = schema
+
+#    def set_schema(self, schema):
+#        """
+#        Sets the schema of the stream created by this source.
+#        
+#        Args:
+#            schema(StreamSchema): Schema for the output stream
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.schema = schema
+#        return self
+
+    @property
+    def app_config_name(self):
+        """
+        str: The name of an application configuration with consumer configurations.
+        The application configuration must exist when the topology is submitted.
+        """
+        return self._app_config_name
+
+    @app_config_name.setter
+    def app_config_name(self, app_config_name):
+        self._app_config_name = app_config_name
+
+#    def set_app_config_name(self, app_config_name):
+#        """
+#        Sets the name of an application configuration that contains the properties
+#        for the consumer configuration. The application configuration must exist when
+#        the topology is submitted.
+#        
+#        Args:
+#            app_config_name(str): the name of an application configuration
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.app_config_name = app_config_name
+#        return self
+
+    @property
+    def consumer_config(self):
+        """
+        dict: The consumer configuration
+        
+        The consumer configuration must be a ``dict`` in which the keys are the 
+        `consumer configs defined by Kafka <https://kafka.apache.org/23/documentation/#consumerconfigs>`_.
+        A consumer configuration can be created with :func:`create_connection_properties`.
+        The properties given as `consumer_config` override the same properties in an application
+        configuration if present.
+        """
+        return self._consumer_config
+
+    @consumer_config.setter
+    def consumer_config(self, config):
+        self._consumer_config = config
+
+#    def set_consumer_config(self, config):
+#        """
+#        Sets the consumer configuration. The properties given with this config override 
+#        the same properties in an application configuration if present.
+#        
+#        Args:
+#            config(dict): the consumer configuration.
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.consumer_config = config
+#        return self
+
+    @property
+    def group_id(self):
+        """
+        str: The identifier of a Kafka consumer group. This attribute goes into the ``group.id``
+        consumer config and overrides the same property if given as :attr:`consumer_config`.
+        When no group identifier is given, a group identifier is generated from the job name and the topic.
+        """
+        return self._group_id
+
+    @group_id.setter
+    def group_id(self, group_id):
+        self._group_id = group_id
+
+#    def set_group_id(self, group_id):
+#        """
+#        Sets a Kafka consumer group identifier.
+#
+#        Args:
+#            group_id(str): the consumer group identifier
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.group_id = group_id
+#        return self
+
+    @property
+    def group_size(self):
+        """
+        int: The size of a Kafka consumer group, in which multiple consumers share 
+        the partitions of the subscribed topics.
+        
+        With ``group_size`` greater than 1, the 
+        source stream is split into multiple channels as the start of a parallel region.
+        
+        This is effectively the same as ``Stream.set_parallel(width=group_size)``.
+        
+        The parallel region can be ended for example, with ``Stream.end_parallel()``.
+        """
+        return self._group_size
+
+    @group_size.setter
+    def group_size(self, group_size):
+        self._group_size = group_size
+
+#    def set_group_size(self, group_size):
+#        """
+#        Configures the size of a Kafka consumer group.
+#        Args:
+#            group_size(int): the number of consumers that share the subscribed topic partitions
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.group_size = group_size
+#        return self
+
+    @property
+    def client_id(self):
+        """
+        str: An optional client identifier for Kafka. The client identifier has no 
+        function for the application, but allows to identify the Kafka client within the Kafka server.
+        
+        The client identifier given here overrides the consumer config ``client.id`` if given
+        in an application configuration or within the consumer configuration.
+         
+        .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
+            have a different client identifier.
+       """
+        return self._client_id
+
+    @client_id.setter
+    def client_id(self, client_id):
+        self._client_id = client_id
+
+#    def set_client_id(self, client_id):
+#        """
+#        Sets a Kafka client identifier.
+#        
+#        Args:
+#            client_id(str): the client identifier
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaConsumer: this instance
+#        """
+#        self.client_id = client_id
+#        return self
+
+    def populate(self, topology, name, **options) -> streamsx.topology.topology.Stream:
+        # test mandatory parameters 
+        if self._topic is None:
+            raise TypeError(self._topic)
+        
+        if isinstance(self._topic, str):
+            _topic_tok = self._topic.replace("-", "_")
+        elif isinstance(self._topic, list):
+            # topic list must not be empty
+            if self._topic:
+                _topic_tok = "_".join(self._topic).replace("-", "_")
+            else:
+                raise ValueError('topic must not be an empty list')
+        else:
+            raise TypeError('trusted_cert must be of str or list type')
+
+        if self._app_config_name is None and not self._consumer_config:
+            raise TypeError('one of app_config_name or non-empty consumer_config must be set')
+        
+        msg_attr_name = None
+        if self._schema is CommonSchema.Json:
+            msg_attr_name='jsonString'
+        elif self._schema is CommonSchema.String:
+            msg_attr_name='string'
+        elif self._schema is Schema.BinaryMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif self._schema is Schema.StringMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif self._schema is Schema.BinaryMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        elif self._schema is Schema.StringMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        else:
+            raise TypeError(self._schema)
+    
+        if self._group_id is None:
+            self._group_id = streamsx.spl.op.Expression.expression('getJobName() + "_" + "' + str(_topic_tok) + '"')
+
+        propsFilename = None
+        if self._consumer_config:
+            if name is None:
+                fName = 'consumer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            else:
+                fName = 'consumer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            propsFilename = _add_properties_file(topology, self._consumer_config, fName)
+
+        if name is None:
+            name = "KafkaConsumed_" + _topic_tok
+
+        op = _KafkaConsumer(topology,
+                            schema=self._schema,
+                            vmArg=self._vm_args,
+                            appConfigName=self._app_config_name,
+                            outputMessageAttributeName=msg_attr_name,
+                            propertiesFile=propsFilename,
+                            topic=self._topic, 
+                            groupId=self._group_id,
+                            clientId=self._client_id,
+                            name=name)
+        oStream = op.stream
+        if self._group_size > 1:
+            return oStream.set_parallel(self._group_size)
+        else:
+            return oStream
+
+
+class KafkaProducer(AbstractSink):
+    """
+    The ``KafkaProducer`` represents a stream termination that publishes messages to one or more Kafka topics.
+    Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
+
+    Example::
+    
+        producer = KafkaProducer()
+        producer.topic = ["topic1", "topic2"]
+        producer.producer_config = {'bootstrap.servers': 'kafka-server.domain:9092'}
+        stream_to_publish.for_each(producer)
+
+    The minimum set properties that must be used contains
+    
+    - :attr:`producer_config` or :attr:`app_config_name`
+    - :attr:`topic`
+
+    .. since: 1.8.0
+    """
+    def __init__(self):
+        self._topic = None
+        self._vm_args = None
+        self._app_config_name = None
+        self._producer_config = None
+        self._client_id = None
+
+    @property
+    def vm_args(self):
+        """
+         str: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+        """
+        return self._vm_args
+
+    @vm_args.setter
+    def vm_args(self, vm_args):
+        self._vm_args = vm_args
+
+#    def set_vm_args(self, vm_args):
+#        """
+#        Sets arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
+#        
+#        Args:
+#            vm_args(str): Arguments given to the JVM
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaProducer: this instance
+#        """
+#        self.vm_args = vm_args
+#        return self
+
+    @property
+    def topic(self):
+        """
+        str|list: The topic or topics to which the messages are published::
+        
+            p1 = KafkaProducer()
+            p1.topic = "SINGLE_TOPIC"
+            
+            # publish all messages to two topics
+            p2 = KafkaProducer()
+            p2.topic = ["TOPIC_1", "TOPIC_2"]
+        
+        The topic or a list of topics is required.
+        """
+        return self._topic
+
+    @topic.setter
+    def topic(self, topic):
+        self._topic = topic
+
+#    def set_topic(self, topic):
+#        """
+#        Sets a topic or a list of topics to publsh to.
+#        
+#        Args:
+#            topic(str|list): Topic or topics to publish messages
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaProducer: this instance
+#        """
+#        self.topic = topic
+#        return self
+
+    @property
+    def app_config_name(self):
+        """
+        str: The name of an application configuration with producer configurations.
+        The application configuration must exist when the topology is submitted.
+        """
+        return self._app_config_name
+
+    @app_config_name.setter
+    def app_config_name(self, app_config_name):
+        self._app_config_name = app_config_name
+
+#    def set_app_config_name(self, app_config_name):
+#        """
+#        Sets the name of an application configuration that contains the properties
+#        for the producer configuration. The application configuration must exist when
+#        the topology is submitted.
+#        
+#        Args:
+#            app_config_name(str): the name of an application configuration
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaProducer: this instance
+#        """
+#        self.app_config_name = app_config_name
+#        return self
+
+    @property
+    def producer_config(self):
+        """
+        dict: The producer configuration
+        
+        The producer configuration must be a ``dict`` in which the keys are the 
+        `producer configs defined by Kafka <https://kafka.apache.org/23/documentation/#producerconfigs>`_.
+        A producer configuration can be created with :func:`create_connection_properties`.
+        The properties given as `producer_config` override the same properties in an application
+        configuration if present.
+        """
+        return self._producer_config
+
+    @producer_config.setter
+    def producer_config(self, config):
+        self._producer_config = config
+
+#    def set_producer_config(self, config):
+#        """
+#        Sets the producer configuration. The properties given with this config override 
+#        the same properties in an application configuration if present.
+#        
+#        Args:
+#            config(dict): the producer configuration.
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaProducer: this instance
+#        """
+#        self.producer_config = config
+#        return self
+
+    @property
+    def client_id(self):
+        """
+        str: An optional client identifier for Kafka. The client identifier has no 
+        function for the application, but allows to identify the Kafka client within the Kafka server.
+        
+        The client identifier given here overrides the producer config ``client.id`` if given
+        in an application configuration or within the producer configuration.
+        
+        .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
+            have a different client identifier.
+        """
+        return self._client_id
+
+    @client_id.setter
+    def client_id(self, client_id):
+        self._client_id = client_id
+
+#    def set_client_id(self, client_id):
+#        """
+#        Sets a Kafka client identifier.
+#        
+#        Args:
+#            client_id(str): the client identifier
+#            
+#        Returns:
+#            ~streamsx.kafka.KafkaProducer: this instance
+#        """
+#        self.client_id = client_id
+#        return self
+
+
+    def populate(self, topology, stream, name, **options) -> streamsx.topology.topology.Sink:
+        # test mandatory parameters 
+        if self._topic is None:
+            raise TypeError(self._topic)
+        
+        if isinstance(self._topic, str):
+            _topic_tok = self._topic.replace("-", "_")
+        elif isinstance(self._topic, list):
+            # topic list must not be empty
+            if self._topic:
+                _topic_tok = "_".join(self._topic).replace("-", "_")
+            else:
+                raise ValueError('topic must not be an empty list')
+        else:
+            raise TypeError('trusted_cert must be of str or list type')
+
+        if self._app_config_name is None and not self._producer_config:
+            raise TypeError('one of app_config_name or non-empty producer_config must be set')
+
+        msg_attr_name = None
+        streamSchema = stream.oport.schema
+        if streamSchema == CommonSchema.Json:
+            msg_attr_name = 'jsonString'
+        elif streamSchema == CommonSchema.String:
+            msg_attr_name = 'string'
+        elif streamSchema is Schema.BinaryMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif streamSchema is Schema.StringMessage:
+            # msg_attr_name = 'message'
+            pass
+        else:
+            raise TypeError(streamSchema)
+
+        propsFilename = None
+        if self._producer_config:
+            if name is None:
+                fName = 'producer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            else:
+                fName = 'producer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            propsFilename = _add_properties_file(topology, self._producer_config, fName)
+
+        if name is None:
+            name = "KafkaProduced_" + _topic_tok
+
+        op = _KafkaProducer(stream,
+                            propertiesFile=propsFilename,
+                            vmArg=self._vm_args,
+                            appConfigName=self._app_config_name,
+                            topic=self._topic,
+                            clientId=self._client_id,
+                            name=name)
+
+        # create the input attribute expressions after operator op initialization
+        if msg_attr_name is not None:
+            op.params['messageAttribute'] = op.attribute(stream, msg_attr_name)
+    #    if keyAttributeName is not None:
+    #        op.params['keyAttribute'] = op.attribute(stream, keyAttributeName)
+    #    if partitionAttributeName is not None:
+    #        op.params['partitionAttribute'] = op.attribute(stream, partitionAttributeName)
+    #    if timestampAttributeName is not None:
+    #        op.params['timestampAttribute'] = op.attribute(stream, timestampAttributeName)
+    #    if topicAttributeName is not None:
+    #        op.params['topicAttribute'] = op.attribute(stream, topicAttributeName)
+        return streamsx.topology.topology.Sink(op)
 
 
 def _try_read_from_file (potential_filename):
@@ -531,7 +1129,8 @@ def configure_connection_from_properties(instance, name, properties, description
 def create_connection_properties_for_eventstreams(credentials):
     """Create Kafka configuration properties from service credentials for IBM event streams to connect 
     with IBM event streams. The resulting properties can be used for example in 
-    :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
+    :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
+    and as ``producer_properties`` in :py:class:`~KafkaProducer`.
     
     Args:
         credentials(dict|str): The service credentials for IBM event streams as a JSON dict or as string.
@@ -539,7 +1138,7 @@ def create_connection_properties_for_eventstreams(credentials):
             must contain the raw JSON credentials.
         
     Returns:
-        dict: Kafka properties than contain the connection information. They can be used for both :func:`subscribe`, and :func:`publish`.
+        dict: Kafka properties that contain the connection information.
         
     .. warning:: The returned properties contain sensitive data. Storing the properties in
         an application configuration is a good idea to avoid exposing sensitive information.
@@ -568,7 +1167,8 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
                     client_cert=None, client_private_key=None, username=None, password=None, topology=None):
     """Create Kafka properties that can be used to connect a consumer or a producer with a Kafka cluster
     when certificates and keys or authentication is required. The resulting properties can be used
-    for example in :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
+    for example in :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
+    and as ``producer_properties`` in :py:class:`~KafkaProducer`.
     
     When certificates are given, the function will create a truststore and/or a keystore, 
     which are added as file dependencies to the topology, which must not be ``None`` in this case.
@@ -774,6 +1374,9 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
 
     Returns:
         streamsx.topology.topology.Stream: Stream containing messages.
+
+    .. deprecated:: 1.8.0
+        Use the :py:class:`~KafkaConsumer` to create a source stream from a Kafka subscription.
     """
     if topic is None:
         raise TypeError(topic)
@@ -844,6 +1447,9 @@ def publish(stream, topic, kafka_properties, name=None):
 
     Returns:
         streamsx.topology.topology.Sink: Stream termination.
+
+    .. deprecated:: 1.8.0
+        Use the :py:class:`~KafkaProducer` to terminate a stream by publishing messages to Kafka.
     """
     if topic is None:
         raise TypeError(topic)

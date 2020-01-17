@@ -2,8 +2,8 @@ from streamsx.topology.topology import Topology
 from streamsx.topology.context import submit, ContextTypes
 from streamsx.topology.topology import Routing
 from streamsx.topology.schema import StreamSchema
+from streamsx.kafka import KafkaConsumer, KafkaProducer
 from streamsx.kafka.schema import Schema
-import streamsx.kafka as kafka
 
 import random
 import time
@@ -65,31 +65,27 @@ sensorStream = topology.source(
         name="ToKeyedMessage",
         schema=Schema.StringMessage)
 # assume, we are running a Kafka broker at localhost:9092
-producer_configs = dict()
-producer_configs['bootstrap.servers'] = 'localhost:9092'
-kafkaSink = kafka.publish(
-    sensorStream,
-    topic=kafka_topic,
-    kafka_properties=producer_configs,
-    name="SensorPublish")
-
-
+producer_config = dict()
+producer_config['bootstrap.servers'] = 'localhost:9092'
+producer = KafkaProducer()
+producer.producer_config = producer_config
+producer.topic = kafka_topic
+sensorStream.for_each(producer, name="SensorPublish")
 #
 # the consumer side
 #
 # subscribe, create a consumer group with 3 consumers
-consumer_configs = dict()
-consumer_configs['bootstrap.servers'] = 'localhost:9092'
+consumer_config = dict()
+consumer_config['bootstrap.servers'] = 'localhost:9092'
 
 consumerSchema = Schema.StringMessageMeta
-received = kafka.subscribe(
-    topology,
-    topic=kafka_topic,
-    schema=consumerSchema,
-    group='my_consumer_group',
-    kafka_properties=consumer_configs,
-    name="SensorSubscribe"
-    ).set_parallel(3).end_parallel()
+consumer = KafkaConsumer()
+consumer.topic = kafka_topic
+consumer.schema = consumerSchema
+consumer.consumer_config = consumer_config
+consumer.group_id = 'my_consumer_group'
+consumer.group_size = 3
+received = topology.source(consumer, name="SensorSubscribe").end_parallel()
 
 # start a different parallel region partitioned by message key,
 # so that each key always goes into the same parallel channel

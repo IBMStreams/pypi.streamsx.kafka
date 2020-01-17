@@ -21,7 +21,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
-    install_requires=['streamsx>=1.12.10', 'pyOpenSSL==19.0', 'pyJKS==19.0', 'streamsx.toolkits'],
+    install_requires=['streamsx>=1.14.0a0', 'pyOpenSSL==19.0', 'pyJKS==19.0', 'streamsx.toolkits'],
     entry_points = {
         'console_scripts': [
             'streamsx-kafka-make-properties=streamsx.kafka.scripts.makeproperties:main'

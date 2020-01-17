@@ -21,32 +21,36 @@ a topic and the same application consuming the same topic::
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
     from streamsx.topology.context import submit, ContextTypes
-    import streamsx.kafka as kafka
+    from streamsx.kafka import KafkaConsumer, KafkaProducer
     import time
-
+    
     def delay(v):
         time.sleep(5.0)
         return True
-
+    
     topology = Topology('KafkaHelloWorld')
-
+    
     to_kafka = topology.source(['Hello', 'World!'])
     to_kafka = to_kafka.as_string()
     # delay tuple by tuple
     to_kafka = to_kafka.filter(delay)
-
-    # Publish a stream to Kafka using TEST topic, the Kafka servers
-    # assuming, the broker is running on localhost, port 9092
-    kafka_props = {}
-    kafka_props['bootstrap.servers'] = 'localhost:9092'
-    kafka.publish(to_kafka, 'TEST', kafka_props)
-
+    
+    # Publish a stream to Kafka using TEST topic, the Kafka server is at localhost
+    producer = KafkaProducer()
+    producer.topic = 'TEST'
+    producer.producer_config = {'bootstrap.servers': 'localhost:9092'}
+    to_kafka.for_each(producer)
+    
     # Subscribe to same topic as a stream
-    from_kafka = kafka.subscribe(topology, 'TEST', kafka_props, CommonSchema.String)
-
+    consumer = KafkaConsumer()
+    consumer.schema = CommonSchema.String
+    consumer.consumer_config = {'bootstrap.servers': 'localhost:9092'}
+    consumer.topic = 'TEST'
+    from_kafka = topology.source(consumer)
+    
     # You'll find the Hello World! in stdout log file:
     from_kafka.print()
-
+    
     submit(ContextTypes.DISTRIBUTED, topology)
     # The Streams job is kept running.
 
