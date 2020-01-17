@@ -164,7 +164,7 @@ class Schema:
     * message(str) - the message content
     * key(str) - the key for partitioning
     
-    This schema can be used for both  :py:class:`~streamsx.kafka.KafkaConsumer` 
+    This schema can be used for both :py:class:`~streamsx.kafka.KafkaConsumer` 
     and for the stream published with :py:class:`~streamsx.kafka.KafkaProducer`.
 
      .. versionadded:: 1.2
@@ -197,7 +197,7 @@ class Schema:
     * message(bytes) - the message content
     * key(str) - the key for partitioning
     
-    This schema can be used for both  :py:class:`~streamsx.kafka.KafkaConsumer` 
+    This schema can be used for both :py:class:`~streamsx.kafka.KafkaConsumer` 
     and for the stream published with :py:class:`~streamsx.kafka.KafkaProducer`.
 
      .. versionadded:: 1.2

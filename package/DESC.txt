@@ -7,9 +7,9 @@ and submit tuples to a Kafka broker as messages.
 The broker configuration must be done with properties in an application configuration or by
 using a dictionary variable.
 The minimum set of properties must contain the `bootstrap.servers` configuration, which is valid
-for both consumers and producers, i.e. for the `subscribe` and `publish` functions.
+for both consumers and producers, i.e. for the `KafkaConsumer` and `KafkaProducer` classes.
 
-It is also possible to use different application configurations for subscribe and publish
+It is also possible to use different application configurations for consumer and producer
 when special consumer or producer configs must be used.
 
 Sample
