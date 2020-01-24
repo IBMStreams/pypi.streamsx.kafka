@@ -49,9 +49,9 @@ Simple connection parameter example::
     consumerProperties['fetch.min.bytes'] = '1024'
     consumerProperties['max.partition.fetch.bytes'] = '4194304'
     
-    consumer = KafkaConsumer()
-    consumer.topic = 'Your_Topic'
-    consumer.schema = CommonSchema.String
+    consumer = KafkaConsumer(config=consumerProperties,
+                             topic='Your_Topic',
+                             schema=CommonSchema.String)
     consumer.consumer_config = consumerProperties
     
     topology = Topology()
@@ -106,10 +106,9 @@ Example with use of an application configuration::
         properties=consumer_properties,
         description='Consumer properties for authenticated access')
     
-    consumer = kafka.KafkaConsumer()
-    consumer.topic = 'mytopic'
-    consumer.schema = CommonSchema.String
-    consumer.app_config_name = appconfig_name
+    consumer = kafka.KafkaConsumer(config=appconfig_name,
+                                   topic='mytopic',
+                                   schema=CommonSchema.String)
     
     topology = Topology()
     fromKafka = topology.source(consumer)
@@ -152,16 +151,11 @@ a topic and the same application consuming the same topic::
     to_kafka = to_kafka.filter(delay)
     
     # Publish a stream to Kafka using TEST topic, the Kafka server is at localhost
-    producer = KafkaProducer()
-    producer.topic = 'TEST'
-    producer.producer_config = {'bootstrap.servers': 'localhost:9092'}
+    producer = KafkaProducer({'bootstrap.servers': 'localhost:9092'}, 'TEST')
     to_kafka.for_each(producer)
     
     # Subscribe to same topic as a stream
-    consumer = KafkaConsumer()
-    consumer.schema = CommonSchema.String
-    consumer.consumer_config = {'bootstrap.servers': 'localhost:9092'}
-    consumer.topic = 'TEST'
+    consumer = KafkaConsumer({'bootstrap.servers': 'localhost:9092'}, 'TEST', CommonSchema.String)
     from_kafka = topology.source(consumer)
     
     # You'll find the Hello World! in stdout log file:
@@ -172,7 +166,7 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.8.0a1'
+__version__='1.8.0a2'
 
 # controls sphinx documentation:
 __all__ = [

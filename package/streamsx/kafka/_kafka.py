@@ -14,7 +14,6 @@ from tempfile import gettempdir
 import json
 from builtins import str
 from enum import Enum
-from typing import Optional
 import datetime
 import jks
 import OpenSSL
@@ -25,7 +24,6 @@ import string
 import random
 from fileinput import filename
 from streamsx.toolkits import download_toolkit
-from setuptools.command.egg_info import overwrite_arg
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -65,12 +63,6 @@ class KafkaConsumer(AbstractSource):
     """Represents a source for messages read from Kafka, which can be passed to 
     ``Topology.source()`` to create a stream.
     
-    The minimum set properties that must be used contains
-    
-    - :attr:`consumer_config` or :attr:`app_config_name`
-    - :attr:`topic`
-    - :attr:`schema`
-    
     A KafkaConsumer subscribes to one or more topics and can build a consumer 
     group by setting :attr:`group_size` to a value greater than one. In this case,
     the KafkaConsumer is the begin of a parallel region.
@@ -81,31 +73,80 @@ class KafkaConsumer(AbstractSource):
         from streamsx.topology.topology import Topology
         from streamsx.kafka.schema import Schema
         
-        consumer = KafkaConsumer()
-        consumer.topic = "myTopic"
-        consumer.consumer_config = {'bootstrap.servers': 'kafka-server.domain:9092'}
+        consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic="myTopic",
+                                 schema=Schema.StringMessageMeta)
         consumer.group_size = 3
         consumer.group_id = "my-consumer-group"
-        consumer.schema = Schema.StringMessageMeta
     
         topology = Topology("KafkaConsumer")
-        cr_config = ConsistentRegionConfig(trigger=ConsistentRegionConfig.Trigger.PERIODIC, period=60)
-        from_kafka = topology.source(consumer, "SourceName").set_consistent(cr_config)
+        from_kafka = topology.source(consumer, "SourceName").set_consistent(ConsistentRegionConfig.periodic(period=60))
 
     Operator driven consistent region is not supported by the KafkaConsumer.
 
-    .. since: 1.8.0
+    Args:
+        config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
+        topic(str|list): Single topic or list of topics to subscribe messages from
+        schema(StreamSchema): Schema for the output stream
+        
+            Valid schemas are:
+            
+            * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
+            * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+            * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
+            * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
+            * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
+            * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+
+    .. versionadded:: 1.8.0
     """
     
-    def __init__(self):
+    def __init__(self, config, topic, schema):
+        """
+        Args:
+            config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
+            topic(str|list): Topic or topics to subscribe messages from
+            schema(StreamSchema): Schema for the output stream
+        """
+        if isinstance(config, str):
+            self.app_config_name = config
+            self.consumer_config = None
+        elif isinstance(config, dict):
+            self.app_config_name = None
+            self.consumer_config = config
+        else:
+            raise TypeError(config)
+        if topic is None:
+            raise TypeError(topic)
+        self._topic = topic
+        
+        self._msg_attr_name = None
+        if schema is CommonSchema.Json:
+            self._msg_attr_name='jsonString'
+        elif schema is CommonSchema.String:
+            self._msg_attr_name='string'
+        elif schema is Schema.BinaryMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.StringMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.BinaryMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.StringMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        else:
+            raise TypeError(schema)
+        
+        self._schema = schema
+
         self._vm_args = None
-        self._topic = None
-        self._schema = None
-        self._app_config_name = None
-        self._consumer_config = None
         self._group_id = None
         self._group_size = 1
         self._client_id = None
+        super(KafkaConsumer, self).__init__()
 
     @property
     def vm_args(self):
@@ -131,25 +172,23 @@ class KafkaConsumer(AbstractSource):
 #        self.vm_args = vm_args
 #        return self
 
-    @property
-    def topic(self):
-        """
-        str|list: The topic or topics to subscribe::
-        
-            c1 = KafkaConsumer()
-            c1.topic = "SINGLE_TOPIC"
-            
-            # subscribe two topics
-            c2 = KafkaConsumer()
-            c2.topic = ["TOPIC_1", "TOPIC_2"]
-        
-        The topic or a list of topics is required.
-        """
-        return self._topic
+#    @property
+#    def topic(self):
+#        """
+#        str|list: The topic or topics to subscribe::
+#        
+#            c1 = KafkaConsumer(config, topic="SINGLE_TOPIC", schema)
+#            
+#            # subscribe two topics
+#            c2 = KafkaConsumer(config, topic=["TOPIC_1", "TOPIC_2"], schema)
+#       
+#        The topic or a list of topics is required.
+#        """
+#        return self._topic
 
-    @topic.setter
-    def topic(self, topic):
-        self._topic = topic
+#    @topic.setter
+#    def topic(self, topic):
+#        self._topic = topic
 
 #    def set_topic(self, topic):
 #        """
@@ -164,27 +203,27 @@ class KafkaConsumer(AbstractSource):
 #        self.topic = topic
 #        return self
 
-    @property
-    def schema(self):
-        """
-        streamsx.topology.schema.StreamSchema: The schema of the stream created by this source.
-        
-        Valid schemas are:
-        
-        * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
-        * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
-        * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
-        * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
-        * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
-        * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
-        
-        A schema is required.
-        """
-        return self._schema
+#    @property
+#    def schema(self):
+#        """
+#        streamsx.topology.schema.StreamSchema: The schema of the stream created by this source.
+#        
+#        Valid schemas are:
+#        
+#        * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
+#        * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+#        * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
+#        * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
+#        * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
+#        * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+#        
+#        A schema is required.
+#        """
+#        return self._schema
 
-    @schema.setter
-    def schema(self, schema):
-        self._schema = schema
+#    @schema.setter
+#    def schema(self, schema):
+#        self._schema = schema
 
 #    def set_schema(self, schema):
 #        """
@@ -207,9 +246,9 @@ class KafkaConsumer(AbstractSource):
         """
         return self._app_config_name
 
-    @app_config_name.setter
-    def app_config_name(self, app_config_name):
-        self._app_config_name = app_config_name
+#    @app_config_name.setter
+#    def app_config_name(self, app_config_name):
+#        self._app_config_name = app_config_name
 
 #    def set_app_config_name(self, app_config_name):
 #        """
@@ -239,9 +278,9 @@ class KafkaConsumer(AbstractSource):
         """
         return self._consumer_config
 
-    @consumer_config.setter
-    def consumer_config(self, config):
-        self._consumer_config = config
+#    @consumer_config.setter
+#    def consumer_config(self, config):
+#        self._consumer_config = config
 
 #    def set_consumer_config(self, config):
 #        """
@@ -363,27 +402,6 @@ class KafkaConsumer(AbstractSource):
 
         if self._app_config_name is None and not self._consumer_config:
             raise TypeError('one of app_config_name or non-empty consumer_config must be set')
-        
-        msg_attr_name = None
-        if self._schema is CommonSchema.Json:
-            msg_attr_name='jsonString'
-        elif self._schema is CommonSchema.String:
-            msg_attr_name='string'
-        elif self._schema is Schema.BinaryMessage:
-            # msg_attr_name = 'message'
-            pass
-        elif self._schema is Schema.StringMessage:
-            # msg_attr_name = 'message'
-            pass
-        elif self._schema is Schema.BinaryMessageMeta:
-            # msg_attr_name = 'message'
-            pass
-        elif self._schema is Schema.StringMessageMeta:
-            # msg_attr_name = 'message'
-            pass
-        else:
-            raise TypeError(self._schema)
-    
         if self._group_id is None:
             self._group_id = streamsx.spl.op.Expression.expression('getJobName() + "_" + "' + str(_topic_tok) + '"')
 
@@ -402,7 +420,7 @@ class KafkaConsumer(AbstractSource):
                             schema=self._schema,
                             vmArg=self._vm_args,
                             appConfigName=self._app_config_name,
-                            outputMessageAttributeName=msg_attr_name,
+                            outputMessageAttributeName=self._msg_attr_name,
                             propertiesFile=propsFilename,
                             topic=self._topic, 
                             groupId=self._group_id,
@@ -420,26 +438,47 @@ class KafkaProducer(AbstractSink):
     The ``KafkaProducer`` represents a stream termination that publishes messages to one or more Kafka topics.
     Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
 
-    Example::
+    Trivial example::
     
-        producer = KafkaProducer()
-        producer.topic = ["topic1", "topic2"]
-        producer.producer_config = {'bootstrap.servers': 'kafka-server.domain:9092'}
+        producer = KafkaProducer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic="topic")
         stream_to_publish.for_each(producer)
 
-    The minimum set properties that must be used contains
+    Example with two topics in Event Streams cloud service::
     
-    - :attr:`producer_config` or :attr:`app_config_name`
-    - :attr:`topic`
+        eventstreams_credentials_json = "..."
+        producer = KafkaProducer(create_connection_properties_for_eventstreams(eventstreams_credentials_json),
+                                 topic=["topic1", "topic2"])
+        stream_to_publish.for_each(producer)
+    
+    Args:
+        config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
+        topic(str|list): Topic or topics to publish messages
 
-    .. since: 1.8.0
+    .. versionadded:: 1.8.0
     """
-    def __init__(self):
-        self._topic = None
+    
+    def __init__(self, config, topic):
+        """
+        Args:
+            config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
+            topic(str|list): Topic or topics to publish messages
+        """
+        if isinstance(config, str):
+            self.app_config_name = config
+            self.producer_config = None
+        elif isinstance(config, dict):
+            self.app_config_name = None
+            self.producer_config = config
+        else:
+            raise TypeError(config)
+        if topic is None:
+            raise TypeError(topic)
+        self.topic = topic
         self._vm_args = None
-        self._app_config_name = None
-        self._producer_config = None
         self._client_id = None
+        super(KafkaProducer, self).__init__()
+
 
     @property
     def vm_args(self):
@@ -465,25 +504,23 @@ class KafkaProducer(AbstractSink):
 #        self.vm_args = vm_args
 #        return self
 
-    @property
-    def topic(self):
-        """
-        str|list: The topic or topics to which the messages are published::
-        
-            p1 = KafkaProducer()
-            p1.topic = "SINGLE_TOPIC"
-            
-            # publish all messages to two topics
-            p2 = KafkaProducer()
-            p2.topic = ["TOPIC_1", "TOPIC_2"]
-        
-        The topic or a list of topics is required.
-        """
-        return self._topic
+#    @property
+#    def topic(self):
+#        """
+#        str|list: The topic or topics to which the messages are published::
+#        
+#            p1 = KafkaProducer(config, topic="SINGLE_TOPIC")
+#            
+#            # publish all messages to two topics
+#            p2 = KafkaProducer(config, topic=["TOPIC_1", "TOPIC_2"])
+#        
+#        The topic or a list of topics is required.
+#        """
+#        return self._topic
 
-    @topic.setter
-    def topic(self, topic):
-        self._topic = topic
+#    @topic.setter
+#    def topic(self, topic):
+#        self._topic = topic#
 
 #    def set_topic(self, topic):
 #        """
@@ -506,9 +543,9 @@ class KafkaProducer(AbstractSink):
         """
         return self._app_config_name
 
-    @app_config_name.setter
-    def app_config_name(self, app_config_name):
-        self._app_config_name = app_config_name
+#    @app_config_name.setter
+#    def app_config_name(self, app_config_name):
+#        self._app_config_name = app_config_name
 
 #    def set_app_config_name(self, app_config_name):
 #        """
@@ -538,9 +575,9 @@ class KafkaProducer(AbstractSink):
         """
         return self._producer_config
 
-    @producer_config.setter
-    def producer_config(self, config):
-        self._producer_config = config
+#    @producer_config.setter
+#    def producer_config(self, config):
+#        self._producer_config = config#
 
 #    def set_producer_config(self, config):
 #        """
@@ -602,7 +639,7 @@ class KafkaProducer(AbstractSink):
             else:
                 raise ValueError('topic must not be an empty list')
         else:
-            raise TypeError('trusted_cert must be of str or list type')
+            raise TypeError('topic must be of str or list type')
 
         if self._app_config_name is None and not self._producer_config:
             raise TypeError('one of app_config_name or non-empty producer_config must be set')

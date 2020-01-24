@@ -107,9 +107,7 @@ class Schema:
                 name="ToKeyedMessage",
                 schema=Schema.StringMessage)
         # assume, we are running a Kafka broker at localhost:9092
-        producer = KafkaProducer()
-        producer.producer_config = {'bootstrap.servers': 'localhost:9092'}
-        producer.topic = "ThreePartitions"
+        producer = KafkaProducer(config={'bootstrap.servers': 'localhost:9092'}, topic="ThreePartitions")
         sensorStream.for_each(producer)
         
         #
@@ -118,10 +116,9 @@ class Schema:
         # subscribe, create a consumer group with 3 consumers
         
         consumerSchema = Schema.StringMessageMeta
-        consumer = KafkaConsumer()
-        consumer.consumer_config = {'bootstrap.servers': 'localhost:9092'}
-        consumer.schema = consumerSchema
-        consumer.topic = "ThreePartitions"
+        consumer = KafkaConsumer(config={'bootstrap.servers': 'localhost:9092'},
+                                 topic="ThreePartitions",
+                                 schema=consumerSchema)
         consumer.group_id = "my_consumer_group"
         consumer.group_size = 5
         

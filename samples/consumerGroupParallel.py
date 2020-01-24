@@ -67,9 +67,7 @@ sensorStream = topology.source(
 # assume, we are running a Kafka broker at localhost:9092
 producer_config = dict()
 producer_config['bootstrap.servers'] = 'localhost:9092'
-producer = KafkaProducer()
-producer.producer_config = producer_config
-producer.topic = kafka_topic
+producer = KafkaProducer(config=producer_config, topic=kafka_topic)
 sensorStream.for_each(producer, name="SensorPublish")
 #
 # the consumer side
@@ -79,10 +77,7 @@ consumer_config = dict()
 consumer_config['bootstrap.servers'] = 'localhost:9092'
 
 consumerSchema = Schema.StringMessageMeta
-consumer = KafkaConsumer()
-consumer.topic = kafka_topic
-consumer.schema = consumerSchema
-consumer.consumer_config = consumer_config
+consumer = KafkaConsumer(config=consumer_config,topic=kafka_topic,schema=consumerSchema)
 consumer.group_id = 'my_consumer_group'
 consumer.group_size = 3
 received = topology.source(consumer, name="SensorSubscribe").end_parallel()

@@ -36,16 +36,14 @@ a topic and the same application consuming the same topic::
     to_kafka = to_kafka.filter(delay)
     
     # Publish a stream to Kafka using TEST topic, the Kafka server is at localhost
-    producer = KafkaProducer()
-    producer.topic = 'TEST'
-    producer.producer_config = {'bootstrap.servers': 'localhost:9092'}
+    producer = KafkaProducer(config={'bootstrap.servers': 'localhost:9092'},
+                             topic='TEST')
     to_kafka.for_each(producer)
     
     # Subscribe to same topic as a stream
-    consumer = KafkaConsumer()
-    consumer.schema = CommonSchema.String
-    consumer.consumer_config = {'bootstrap.servers': 'localhost:9092'}
-    consumer.topic = 'TEST'
+    consumer = KafkaConsumer(config={'bootstrap.servers': 'localhost:9092'},
+                             topic='TEST',
+                             schema=CommonSchema.String)
     from_kafka = topology.source(consumer)
     
     # You'll find the Hello World! in stdout log file:
