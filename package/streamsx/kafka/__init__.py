@@ -52,8 +52,6 @@ Simple connection parameter example::
     consumer = KafkaConsumer(config=consumerProperties,
                              topic='Your_Topic',
                              schema=CommonSchema.String)
-    consumer.consumer_config = consumerProperties
-    
     topology = Topology()
     fromKafka = topo.source(consumer)
 
@@ -108,7 +106,7 @@ Example with use of an application configuration::
     
     consumer = kafka.KafkaConsumer(config=appconfig_name,
                                    topic='mytopic',
-                                   schema=CommonSchema.String)
+                                   schema=CommonSchema.String
     
     topology = Topology()
     fromKafka = topology.source(consumer)

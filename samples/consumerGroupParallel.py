@@ -77,7 +77,7 @@ consumer_config = dict()
 consumer_config['bootstrap.servers'] = 'localhost:9092'
 
 consumerSchema = Schema.StringMessageMeta
-consumer = KafkaConsumer(config=consumer_config,topic=kafka_topic,schema=consumerSchema)
+consumer = KafkaConsumer(config=consumer_config, topic=kafka_topic, schema=consumerSchema)
 consumer.group_id = 'my_consumer_group'
 consumer.group_size = 3
 received = topology.source(consumer, name="SensorSubscribe").end_parallel()

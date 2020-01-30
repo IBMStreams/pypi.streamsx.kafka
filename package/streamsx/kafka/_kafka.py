@@ -60,7 +60,8 @@ class AuthMethod(Enum):
 
 
 class KafkaConsumer(AbstractSource):
-    """Represents a source for messages read from Kafka, which can be passed to 
+    """
+    Represents a source for messages read from Kafka, which can be passed to 
     ``Topology.source()`` to create a stream.
     
     A KafkaConsumer subscribes to one or more topics and can build a consumer 
@@ -142,101 +143,35 @@ class KafkaConsumer(AbstractSource):
         
         self._schema = schema
 
-        self._vm_args = None
+        self._vm_arg = None
         self._group_id = None
         self._group_size = 1
         self._client_id = None
+        self._ssl_debug = False
         super(KafkaConsumer, self).__init__()
 
     @property
-    def vm_args(self):
+    def ssl_debug(self):
         """
-         str: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+        bool: When ``True`` the property enables verbose SSL debug output at runtime.
         """
-        return self._vm_args
+        return self._ssl_debug
+    
+    @ssl_debug.setter
+    def ssl_debug(self, ssl_debug:bool):
+        self._ssl_debug = ssl_debug
 
-    @vm_args.setter
-    def vm_args(self, vm_args):
-        self._vm_args = vm_args
+    @property
+    def vm_arg(self):
+        """
+         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+        """
+        return self._vm_arg
 
-#    def set_vm_args(self, vm_args):
-#        """
-#        Sets arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
-#        
-#        Args:
-#            vm_args(str): Arguments given to the JVM
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.vm_args = vm_args
-#        return self
-
-#    @property
-#    def topic(self):
-#        """
-#        str|list: The topic or topics to subscribe::
-#        
-#            c1 = KafkaConsumer(config, topic="SINGLE_TOPIC", schema)
-#            
-#            # subscribe two topics
-#            c2 = KafkaConsumer(config, topic=["TOPIC_1", "TOPIC_2"], schema)
-#       
-#        The topic or a list of topics is required.
-#        """
-#        return self._topic
-
-#    @topic.setter
-#    def topic(self, topic):
-#        self._topic = topic
-
-#    def set_topic(self, topic):
-#        """
-#        Sets one or multiple topics to subscribe to.
-#        
-#        Args:
-#            topic(str|list): Topic or topics to subscribe messages from
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.topic = topic
-#        return self
-
-#    @property
-#    def schema(self):
-#        """
-#        streamsx.topology.schema.StreamSchema: The schema of the stream created by this source.
-#        
-#        Valid schemas are:
-#        
-#        * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
-#        * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
-#        * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
-#        * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
-#        * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
-#        * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
-#        
-#        A schema is required.
-#        """
-#        return self._schema
-
-#    @schema.setter
-#    def schema(self, schema):
-#        self._schema = schema
-
-#    def set_schema(self, schema):
-#        """
-#        Sets the schema of the stream created by this source.
-#        
-#        Args:
-#            schema(StreamSchema): Schema for the output stream
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.schema = schema
-#        return self
+    @vm_arg.setter
+    def vm_arg(self, vm_arg):
+        if vm_arg:
+            self._vm_arg = vm_arg
 
     @property
     def app_config_name(self):
@@ -245,25 +180,6 @@ class KafkaConsumer(AbstractSource):
         The application configuration must exist when the topology is submitted.
         """
         return self._app_config_name
-
-#    @app_config_name.setter
-#    def app_config_name(self, app_config_name):
-#        self._app_config_name = app_config_name
-
-#    def set_app_config_name(self, app_config_name):
-#        """
-#        Sets the name of an application configuration that contains the properties
-#        for the consumer configuration. The application configuration must exist when
-#        the topology is submitted.
-#        
-#        Args:
-#            app_config_name(str): the name of an application configuration
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.app_config_name = app_config_name
-#        return self
 
     @property
     def consumer_config(self):
@@ -278,23 +194,9 @@ class KafkaConsumer(AbstractSource):
         """
         return self._consumer_config
 
-#    @consumer_config.setter
-#    def consumer_config(self, config):
-#        self._consumer_config = config
-
-#    def set_consumer_config(self, config):
-#        """
-#        Sets the consumer configuration. The properties given with this config override 
-#        the same properties in an application configuration if present.
-#        
-#        Args:
-#            config(dict): the consumer configuration.
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.consumer_config = config
-#        return self
+    @consumer_config.setter
+    def consumer_config(self, consumer_config):
+        self._consumer_config = consumer_config
 
     @property
     def group_id(self):
@@ -308,19 +210,6 @@ class KafkaConsumer(AbstractSource):
     @group_id.setter
     def group_id(self, group_id):
         self._group_id = group_id
-
-#    def set_group_id(self, group_id):
-#        """
-#        Sets a Kafka consumer group identifier.
-#
-#        Args:
-#            group_id(str): the consumer group identifier
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.group_id = group_id
-#        return self
 
     @property
     def group_size(self):
@@ -341,18 +230,6 @@ class KafkaConsumer(AbstractSource):
     def group_size(self, group_size):
         self._group_size = group_size
 
-#    def set_group_size(self, group_size):
-#        """
-#        Configures the size of a Kafka consumer group.
-#        Args:
-#            group_size(int): the number of consumers that share the subscribed topic partitions
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.group_size = group_size
-#        return self
-
     @property
     def client_id(self):
         """
@@ -370,19 +247,6 @@ class KafkaConsumer(AbstractSource):
     @client_id.setter
     def client_id(self, client_id):
         self._client_id = client_id
-
-#    def set_client_id(self, client_id):
-#        """
-#        Sets a Kafka client identifier.
-#        
-#        Args:
-#            client_id(str): the client identifier
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaConsumer: this instance
-#        """
-#        self.client_id = client_id
-#        return self
 
     def populate(self, topology, name, **options) -> streamsx.topology.topology.Stream:
         # test mandatory parameters 
@@ -415,10 +279,19 @@ class KafkaConsumer(AbstractSource):
 
         if name is None:
             name = "KafkaConsumed_" + _topic_tok
+        vmargs = None
+        if self._vm_arg or self._ssl_debug:
+            vmargs = []
+            if isinstance(self._vm_arg, list):
+                vmargs.extend(self._vm_arg)
+            elif isinstance(self._vm_arg, str):
+                vmargs.append(self._vm_arg)
+            if self._ssl_debug:
+                vmargs.append('-Djavax.net.debug=all')
 
         op = _KafkaConsumer(topology,
                             schema=self._schema,
-                            vmArg=self._vm_args,
+                            vmArg=vmargs,
                             appConfigName=self._app_config_name,
                             outputMessageAttributeName=self._msg_attr_name,
                             propertiesFile=propsFilename,
@@ -475,65 +348,36 @@ class KafkaProducer(AbstractSink):
         if topic is None:
             raise TypeError(topic)
         self.topic = topic
-        self._vm_args = None
+        self._vm_arg = None
         self._client_id = None
+        self._ssl_debug = False
+
         super(KafkaProducer, self).__init__()
 
+    @property
+    def ssl_debug(self):
+        """
+        bool: enables verbose SSL debug output at runtime when SSL connections are used.
+        """
+        return self._ssl_debug
+    
+    @ssl_debug.setter
+    def ssl_debug(self, ssl_debug:bool):
+        self._ssl_debug = ssl_debug
 
     @property
-    def vm_args(self):
+    def vm_arg(self):
         """
-         str: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
+             For multiple arguments, use a list::
+                 mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
-        return self._vm_args
+        return self._vm_arg
 
-    @vm_args.setter
-    def vm_args(self, vm_args):
-        self._vm_args = vm_args
-
-#    def set_vm_args(self, vm_args):
-#        """
-#        Sets arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
-#        
-#        Args:
-#            vm_args(str): Arguments given to the JVM
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaProducer: this instance
-#        """
-#        self.vm_args = vm_args
-#        return self
-
-#    @property
-#    def topic(self):
-#        """
-#        str|list: The topic or topics to which the messages are published::
-#        
-#            p1 = KafkaProducer(config, topic="SINGLE_TOPIC")
-#            
-#            # publish all messages to two topics
-#            p2 = KafkaProducer(config, topic=["TOPIC_1", "TOPIC_2"])
-#        
-#        The topic or a list of topics is required.
-#        """
-#        return self._topic
-
-#    @topic.setter
-#    def topic(self, topic):
-#        self._topic = topic#
-
-#    def set_topic(self, topic):
-#        """
-#        Sets a topic or a list of topics to publsh to.
-#        
-#        Args:
-#            topic(str|list): Topic or topics to publish messages
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaProducer: this instance
-#        """
-#        self.topic = topic
-#        return self
+    @vm_arg.setter
+    def vm_arg(self, vm_arg):
+        if vm_arg:
+            self._vm_arg = vm_arg
 
     @property
     def app_config_name(self):
@@ -542,25 +386,6 @@ class KafkaProducer(AbstractSink):
         The application configuration must exist when the topology is submitted.
         """
         return self._app_config_name
-
-#    @app_config_name.setter
-#    def app_config_name(self, app_config_name):
-#        self._app_config_name = app_config_name
-
-#    def set_app_config_name(self, app_config_name):
-#        """
-#        Sets the name of an application configuration that contains the properties
-#        for the producer configuration. The application configuration must exist when
-#        the topology is submitted.
-#        
-#        Args:
-#            app_config_name(str): the name of an application configuration
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaProducer: this instance
-#        """
-#        self.app_config_name = app_config_name
-#        return self
 
     @property
     def producer_config(self):
@@ -575,23 +400,9 @@ class KafkaProducer(AbstractSink):
         """
         return self._producer_config
 
-#    @producer_config.setter
-#    def producer_config(self, config):
-#        self._producer_config = config#
-
-#    def set_producer_config(self, config):
-#        """
-#        Sets the producer configuration. The properties given with this config override 
-#        the same properties in an application configuration if present.
-#        
-#        Args:
-#            config(dict): the producer configuration.
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaProducer: this instance
-#        """
-#        self.producer_config = config
-#        return self
+    @producer_config.setter
+    def producer_config(self, config):
+        self._producer_config = config#
 
     @property
     def client_id(self):
@@ -610,20 +421,6 @@ class KafkaProducer(AbstractSink):
     @client_id.setter
     def client_id(self, client_id):
         self._client_id = client_id
-
-#    def set_client_id(self, client_id):
-#        """
-#        Sets a Kafka client identifier.
-#        
-#        Args:
-#            client_id(str): the client identifier
-#            
-#        Returns:
-#            ~streamsx.kafka.KafkaProducer: this instance
-#        """
-#        self.client_id = client_id
-#        return self
-
 
     def populate(self, topology, stream, name, **options) -> streamsx.topology.topology.Sink:
         # test mandatory parameters 
@@ -646,9 +443,9 @@ class KafkaProducer(AbstractSink):
 
         msg_attr_name = None
         streamSchema = stream.oport.schema
-        if streamSchema == CommonSchema.Json:
+        if streamSchema is CommonSchema.Json:
             msg_attr_name = 'jsonString'
-        elif streamSchema == CommonSchema.String:
+        elif streamSchema is CommonSchema.String:
             msg_attr_name = 'string'
         elif streamSchema is Schema.BinaryMessage:
             # msg_attr_name = 'message'
@@ -669,10 +466,19 @@ class KafkaProducer(AbstractSink):
 
         if name is None:
             name = "KafkaProduced_" + _topic_tok
+        vmargs = None
+        if self._vm_arg or self._ssl_debug:
+            vmargs = []
+            if isinstance(self._vm_arg, list):
+                vmargs.extend(self._vm_arg)
+            elif isinstance(self._vm_arg, str):
+                vmargs.append(self._vm_arg)
+            if self._ssl_debug:
+                vmargs.append('-Djavax.net.debug=all')
 
         op = _KafkaProducer(stream,
                             propertiesFile=propsFilename,
-                            vmArg=self._vm_args,
+                            vmArg=vmargs,
                             appConfigName=self._app_config_name,
                             topic=self._topic,
                             clientId=self._client_id,
@@ -1492,9 +1298,9 @@ def publish(stream, topic, kafka_properties, name=None):
         raise TypeError(topic)
     msg_attr_name = None
     streamSchema = stream.oport.schema
-    if streamSchema == CommonSchema.Json:
+    if streamSchema is CommonSchema.Json:
         msg_attr_name = 'jsonString'
-    elif streamSchema == CommonSchema.String:
+    elif streamSchema is CommonSchema.String:
         msg_attr_name = 'string'
     elif streamSchema is Schema.BinaryMessage:
         # msg_attr_name = 'message'

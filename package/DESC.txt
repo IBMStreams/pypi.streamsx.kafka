@@ -1,8 +1,8 @@
 Overview
 ========
 
-Provides functions to read messages from a Kafka broker as a stream
-and submit tuples to a Kafka broker as messages.
+Provides functions to read messages from Kafka brokers including the IBM Event Streams cloud service as a stream
+and submit tuples to Kafka brokers as messages.
 
 The broker configuration must be done with properties in an application configuration or by
 using a dictionary variable.
@@ -42,8 +42,8 @@ a topic and the same application consuming the same topic::
     
     # Subscribe to same topic as a stream
     consumer = KafkaConsumer(config={'bootstrap.servers': 'localhost:9092'},
-                             topic='TEST',
-                             schema=CommonSchema.String)
+                             schema=CommonSchema.String,
+                             topic='TEST')
     from_kafka = topology.source(consumer)
     
     # You'll find the Hello World! in stdout log file:
