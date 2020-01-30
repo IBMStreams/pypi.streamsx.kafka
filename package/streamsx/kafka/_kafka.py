@@ -402,7 +402,7 @@ class KafkaProducer(AbstractSink):
 
     @producer_config.setter
     def producer_config(self, config):
-        self._producer_config = config#
+        self._producer_config = config
 
     @property
     def client_id(self):
