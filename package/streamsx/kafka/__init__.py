@@ -6,17 +6,18 @@
 Overview
 ++++++++
 
-This module allows a Streams application to :py:func:`subscribe <subscribe>` a Kafka topic
-as a stream and :py:func:`publish <publish>` messages on a Kafka topic from a stream
-of tuples.
+This module allows a Streams application to subscribe Kafka topics
+as a stream and to publish messages on a Kafka topics from a stream
+of tuples. To achieve this, this module provides the :py:class:`KafkaConsumer` and :py:class:`KafkaProducer` classes.
 
 Connection to a Kafka broker
 ++++++++++++++++++++++++++++
 
 To bootstrap servers of the Kafka broker can be defined using a Streams application configuration or
 within the Python code by using a dictionary variable.
-The name of the application configuration or the dictionary must be specified using the ``kafka_properties``
-parameter to :py:func:`subscribe` or :py:func:`publish`.
+The name of the application configuration must be set as the ``app_config_name`` of the :py:class:`KafkaConsumer`
+or :py:class:`KafkaProducer`. Alternative, or in addition to an application configuration, these classes have 
+attributes ``consumer_config`` or ``producer_config`` to set a dictionary with configs.
 The minimum set of properties in the application configuration or dictionary contains ``bootstrap.servers``, for example
 
 .. csv-table::
@@ -26,10 +27,12 @@ The minimum set of properties in the application configuration or dictionary con
 
 Other configs for Kafka consumers or Kafka producers can be added to the application configuration or dictionary.
 When configurations are specified, which are specific for consumers or producers only, it is recommended
-to use different application configurations or variables of dict type for :py:func:`publish <publish>` 
-and :py:func:`subscribe <subscribe>`.
+to use different application configurations or variables of dict type for :py:class:`KafkaConsumer` and :py:class:`KafkaProducer`.
 
-The consumer and producer configs can be found in the `Kafka documentation <https://kafka.apache.org/documentation/>`_.
+When the connection information contains sensitive information, like login information, it is also possible to store 
+these information together with the server names in an application configuration and configure consumer or producer 
+specific configs as attributes to :py:class:`KafkaConsumer` or :py:class:`KafkaProducer`.
+The consumer and producer configs can be found in the `Kafka documentation <https://kafka.apache.org/23/documentation/>`_.
  
 Please note, that the underlying SPL toolkit already adjusts several configurations.
 Please review the `toolkit operator reference <https://ibmstreams.github.io/streamsx.kafka/doc/spldoc/html/>`_ 
@@ -37,7 +40,7 @@ for defaults and adjusted configurations.
 
 Simple connection parameter example::
 
-    import streamsx.kafka as kafka
+    from streamsx.kafka import KafkaConsumer
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
     
@@ -45,8 +48,12 @@ Simple connection parameter example::
     consumerProperties['bootstrap.servers'] = 'kafka-host1.domain:9092,kafka-host2.domain:9092'
     consumerProperties['fetch.min.bytes'] = '1024'
     consumerProperties['max.partition.fetch.bytes'] = '4194304'
+    
+    consumer = KafkaConsumer(config=consumerProperties,
+                             topic='Your_Topic',
+                             schema=CommonSchema.String)
     topology = Topology()
-    kafka.subscribe(topology, 'Your_Topic', consumerProperties, CommonSchema.String)
+    fromKafka = topo.source(consumer)
 
 When trusted certificates, or client certificates, and private keys are required to connect with a Kafka cluster,
 the function :py:func:`create_connection_properties <create_connection_properties>` helps to create stores for
@@ -65,7 +72,7 @@ Example with use of an application configuration::
     from streamsx.topology.schema import CommonSchema
     from streamsx.rest import Instance
     import streamsx.topology.context
-
+    
     import streamsx.kafka as kafka
     
     topology = Topology('ConsumeFromKafka')
@@ -89,15 +96,20 @@ Example with use of an application configuration::
     instance_cfg = icpd_util.get_service_instance_details(name='instanceName')
     instance_cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
     streams_instance = Instance.of_service(instance_cfg)
-
+    
     # create the application configuration
-    appconfig_name = configure_connection_from_properties(
+    appconfig_name = kafka.configure_connection_from_properties(
         instance=streams_instance,
         name='kafkaConsumerProps',
         properties=consumer_properties,
         description='Consumer properties for authenticated access')
     
-    messages = kafka.subscribe (topology, 'mytopic', appconfig_name, CommonSchema.String)
+    consumer = kafka.KafkaConsumer(config=appconfig_name,
+                                   topic='mytopic',
+                                   schema=CommonSchema.String)
+    
+    topology = Topology()
+    fromKafka = topology.source(consumer)
 
 Messages
 ++++++++
@@ -122,40 +134,43 @@ a topic and the same application consuming the same topic::
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
     from streamsx.topology.context import submit, ContextTypes
-    import streamsx.kafka as kafka
+    from streamsx.kafka import KafkaConsumer, KafkaProducer
     import time
-
+    
     def delay(v):
         time.sleep(5.0)
         return True
-
+    
     topology = Topology('KafkaHelloWorld')
-
+    
     to_kafka = topology.source(['Hello', 'World!'])
     to_kafka = to_kafka.as_string()
     # delay tuple by tuple
     to_kafka = to_kafka.filter(delay)
-
-    # Publish a stream to Kafka using TEST topic, the Kafka servers
-    # (bootstrap.servers) are configured in the application configuration 'kafka_props'.
-    kafka.publish(to_kafka, 'TEST', 'kafka_props')
-
+    
+    # Publish a stream to Kafka using TEST topic, the Kafka server is at localhost
+    producer = KafkaProducer({'bootstrap.servers': 'localhost:9092'}, 'TEST')
+    to_kafka.for_each(producer)
+    
     # Subscribe to same topic as a stream
-    from_kafka = kafka.subscribe(topology, 'TEST', 'kafka_props', CommonSchema.String)
-
+    consumer = KafkaConsumer({'bootstrap.servers': 'localhost:9092'}, 'TEST', CommonSchema.String)
+    from_kafka = topology.source(consumer)
+    
     # You'll find the Hello World! in stdout log file:
     from_kafka.print()
-
+    
     submit(ContextTypes.DISTRIBUTED, topology)
     # The Streams job is kept running.
 
 """
 
-__version__='1.7.0'
+__version__='1.8.0a2'
 
 # controls sphinx documentation:
 __all__ = [
     'AuthMethod',
+    'KafkaConsumer',
+    'KafkaProducer',
     'download_toolkit',
     'create_connection_properties',
     'create_connection_properties_for_eventstreams',
@@ -164,4 +179,4 @@ __all__ = [
     'publish',
     'subscribe'
     ]
-from streamsx.kafka._kafka import AuthMethod, create_connection_properties, create_connection_properties_for_eventstreams, configure_connection, configure_connection_from_properties, publish, subscribe, download_toolkit
+from streamsx.kafka._kafka import AuthMethod, KafkaConsumer, KafkaProducer, create_connection_properties, create_connection_properties_for_eventstreams, configure_connection, configure_connection_from_properties, publish, subscribe, download_toolkit

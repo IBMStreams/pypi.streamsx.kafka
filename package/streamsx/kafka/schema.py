@@ -1,10 +1,6 @@
 # coding=utf-8
 # Licensed Materials - Property of IBM
 # Copyright IBM Corp. 2019
-"""
-Schemas for streams created with the :py:meth:`~streamsx.kafka.subscribe` method, and usable for 
-streams terminated with the :py:meth:`~streamsx.kafka.publish`. All of these message types are keyed messages.
-"""
 
 from streamsx.topology.schema import StreamSchema
 #
@@ -17,8 +13,8 @@ _SPL_SCHEMA_BLOB_MESSAGE_META = 'tuple<blob message,rstring key,rstring topic,in
 
 class Schema:
     """
-    Structured stream schemas for keyed messages for :py:meth:`~streamsx.kafka.subscribe`, 
-    and for streams that are published by :py:meth:`~streamsx.kafka.publish` to an Event Streams topic.
+    Structured stream schemas for keyed messages for :py:class:`~streamsx.kafka.KafkaConsumer`, 
+    and for streams that are published by :py:class:`~streamsx.kafka.KafkaProducer` to Kafka topics.
     
     The schemas
     
@@ -26,8 +22,8 @@ class Schema:
     * :py:const:`BinaryMessage`
     
     have the attributes ``message``, and ``key``. They vary in the type for the 
-    ``message`` attribute and can be used for :py:meth:`~streamsx.kafka.subscribe` 
-    and for the stream published with :py:meth:`~streamsx.kafka.publish`.
+    ``message`` attribute and can be used for :py:class:`~streamsx.kafka.KafkaConsumer` 
+    and for the stream published with :py:class:`~streamsx.kafka.KafkaProducer`.
     
     The schemas
     
@@ -35,7 +31,7 @@ class Schema:
     * :py:const:`BinaryMessageMeta`
     
     have the attributes ``message``, ``key``, ``topic``, ``partition``, ``offset``, and ``messageTimestamp``. They vary in the type for the 
-    ``message`` attribute and can be used for :py:meth:`~streamsx.kafka.subscribe` and :py:meth:`~streamsx.kafka.publish`.
+    ``message`` attribute and can be used for :py:class:`~streamsx.kafka.KafkaConsumer`.
     
     All schemas defined in this class are instances of `streamsx.topology.schema.StreamSchema`.
     
@@ -43,13 +39,13 @@ class Schema:
     possibly partitioned topic in a Kafka broker. Then, it creates a consumer group 
     that subscribes to the topic, and processes the received messages in parallel channels
     partitioned by the message key::
-    
+
         from streamsx.topology.topology import Topology
         from streamsx.topology.context import submit, ContextTypes
         from streamsx.topology.topology import Routing
         from streamsx.topology.schema import StreamSchema
         from streamsx.kafka.schema import Schema
-        import streamsx.kafka as kafka
+        from streamsx.kafka import KafkaConsumer, KafkaProducer
         
         import random
         import time
@@ -111,31 +107,22 @@ class Schema:
                 name="ToKeyedMessage",
                 schema=Schema.StringMessage)
         # assume, we are running a Kafka broker at localhost:9092
-        producer_configs = dict()
-        producer_configs['bootstrap.servers'] = 'localhost:9092'
-        kafkaSink = kafka.publish(
-            sensorStream,
-            topic="ThreePartitions",
-            kafka_properties=producer_configs,
-            name="SensorPublish")
-        
+        producer = KafkaProducer(config={'bootstrap.servers': 'localhost:9092'}, topic="ThreePartitions")
+        sensorStream.for_each(producer)
         
         #
         # the consumer side
         #
         # subscribe, create a consumer group with 3 consumers
-        consumer_configs = dict()
-        consumer_configs['bootstrap.servers'] = 'localhost:9092'
         
         consumerSchema = Schema.StringMessageMeta
-        received = kafka.subscribe(
-            topology,
-            topic="ThreePartitions",
-            schema=consumerSchema,
-            group='my_consumer_group',
-            kafka_properties=consumer_configs,
-            name="SensorSubscribe"
-            ).set_parallel(3).end_parallel()
+        consumer = KafkaConsumer(config={'bootstrap.servers': 'localhost:9092'},
+                                 topic="ThreePartitions",
+                                 schema=consumerSchema)
+        consumer.group_id = "my_consumer_group"
+        consumer.group_size = 5
+        
+        received = topology.source(consumer, name="SensorSubscribe").end_parallel()
         
         # start a different parallel region partitioned by message key,
         # so that each key always goes into the same parallel channel
@@ -163,7 +150,6 @@ class Schema:
         receivedValidated.end_parallel().print()
         
         submit(ContextTypes.DISTRIBUTED, topology)
-    
     """
 
     StringMessage = StreamSchema (_SPL_SCHEMA_STRING_MESSAGE)
@@ -175,8 +161,8 @@ class Schema:
     * message(str) - the message content
     * key(str) - the key for partitioning
     
-    This schema can be used for both :py:meth:`~streamsx.kafka.subscribe`, 
-    and for streams that are published by :py:meth:`~streamsx.kafka.publish`.
+    This schema can be used for both :py:class:`~streamsx.kafka.KafkaConsumer` 
+    and for the stream published with :py:class:`~streamsx.kafka.KafkaProducer`.
 
      .. versionadded:: 1.2
     """
@@ -184,7 +170,6 @@ class Schema:
     StringMessageMeta = StreamSchema (_SPL_SCHEMA_STRING_MESSAGE_META)
     """
     Stream schema with message, key, and message meta data, where both message and key are strings.
-    This schema can be used for :py:meth:`~streamsx.kafka.subscribe`.
     
     The schema defines following attributes
     
@@ -194,6 +179,8 @@ class Schema:
     * partition(int) - the topic partition number (32 bit)
     * offset(int) - the offset of the message within the topic partition (64 bit)
     * messageTimestamp(int) - the message timestamp in milliseconds since epoch (64 bit)
+
+    This schema can be used for :py:class:`~streamsx.kafka.KafkaConsumer`.
 
      .. versionadded:: 1.2
     """
@@ -207,8 +194,8 @@ class Schema:
     * message(bytes) - the message content
     * key(str) - the key for partitioning
     
-    This schema can be used for both :py:meth:`~streamsx.kafka.subscribe`, 
-    and for streams that are published by :py:meth:`~streamsx.kafka.publish`.
+    This schema can be used for both :py:class:`~streamsx.kafka.KafkaConsumer` 
+    and for the stream published with :py:class:`~streamsx.kafka.KafkaProducer`.
 
      .. versionadded:: 1.2
     """
@@ -216,7 +203,6 @@ class Schema:
     BinaryMessageMeta = StreamSchema (_SPL_SCHEMA_BLOB_MESSAGE_META)
     """
     Stream schema with message, key, and message meta data, where the message is a binary object (sequence of bytes), and the key is a string.
-    This schema can be used for :py:meth:`~streamsx.kafka.subscribe`.
     
     The schema defines following attributes
     
@@ -226,6 +212,8 @@ class Schema:
     * partition(int) - the topic partition number (32 bit)
     * offset(int) - the offset of the message within the topic partition (64 bit)
     * messageTimestamp(int) - the message timestamp in milliseconds since epoch (64 bit)
+
+    This schema can be used for :py:class:`~streamsx.kafka.KafkaConsumer`.
 
      .. versionadded:: 1.2
     """

@@ -3,6 +3,8 @@
 # Copyright IBM Corp. 2019
 import streamsx.spl.op
 import streamsx.spl.types
+from streamsx.topology.composite import Source as AbstractSource
+from streamsx.topology.composite import ForEach as AbstractSink
 from streamsx.topology.schema import CommonSchema
 import streamsx.spl.toolkit as tk
 
@@ -13,15 +15,13 @@ import json
 from builtins import str
 from enum import Enum
 import datetime
-import jks
-import OpenSSL
 import os
 import sys
 import warnings
 import string
 import random
 from fileinput import filename
-from streamsx.toolkits import download_toolkit
+from streamsx.toolkits import download_toolkit, create_keystore, create_truststore
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -55,6 +55,445 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
+
+
+class KafkaConsumer(AbstractSource):
+    """
+    Represents a source for messages read from Kafka, which can be passed to 
+    ``Topology.source()`` to create a stream.
+    
+    A KafkaConsumer subscribes to one or more topics and can build a consumer 
+    group by setting :attr:`group_size` to a value greater than one. In this case,
+    the KafkaConsumer is the begin of a parallel region.
+    
+    The KafkaConsumer can also be the begin of a periodic consistent region::
+    
+        from streamsx.topology.state import ConsistentRegionConfig
+        from streamsx.topology.topology import Topology
+        from streamsx.kafka.schema import Schema
+        
+        consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic="myTopic",
+                                 schema=Schema.StringMessageMeta)
+        consumer.group_size = 3
+        consumer.group_id = "my-consumer-group"
+    
+        topology = Topology("KafkaConsumer")
+        from_kafka = topology.source(consumer, "SourceName").set_consistent(ConsistentRegionConfig.periodic(period=60))
+
+    Operator driven consistent region is not supported by the KafkaConsumer.
+
+    Args:
+        config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
+        topic(str|list): Single topic or list of topics to subscribe messages from
+        schema(StreamSchema): Schema for the output stream
+        
+            Valid schemas are:
+            
+            * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
+            * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+            * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
+            * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
+            * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
+            * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+
+    .. versionadded:: 1.8.0
+    """
+    
+    def __init__(self, config, topic, schema):
+        """
+        Args:
+            config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
+            topic(str|list): Topic or topics to subscribe messages from
+            schema(StreamSchema): Schema for the output stream
+        """
+        if isinstance(config, str):
+            self.app_config_name = config
+            self.consumer_config = None
+        elif isinstance(config, dict):
+            self.app_config_name = None
+            self.consumer_config = config
+        else:
+            raise TypeError(config)
+        if topic is None:
+            raise TypeError(topic)
+        self._topic = topic
+        
+        self._msg_attr_name = None
+        if schema is CommonSchema.Json:
+            self._msg_attr_name='jsonString'
+        elif schema is CommonSchema.String:
+            self._msg_attr_name='string'
+        elif schema is Schema.BinaryMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.StringMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.BinaryMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        elif schema is Schema.StringMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        else:
+            raise TypeError(schema)
+        
+        self._schema = schema
+
+        self._vm_arg = None
+        self._group_id = None
+        self._group_size = 1
+        self._client_id = None
+        self._ssl_debug = False
+        super(KafkaConsumer, self).__init__()
+
+    @property
+    def ssl_debug(self):
+        """
+        bool: When ``True`` the property enables verbose SSL debug output at runtime.
+        """
+        return self._ssl_debug
+    
+    @ssl_debug.setter
+    def ssl_debug(self, ssl_debug:bool):
+        self._ssl_debug = ssl_debug
+
+    @property
+    def vm_arg(self):
+        """
+         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+        """
+        return self._vm_arg
+
+    @vm_arg.setter
+    def vm_arg(self, vm_arg):
+        if vm_arg:
+            self._vm_arg = vm_arg
+
+    @property
+    def app_config_name(self):
+        """
+        str: The name of an application configuration with consumer configurations.
+        The application configuration must exist when the topology is submitted.
+        """
+        return self._app_config_name
+
+    @property
+    def consumer_config(self):
+        """
+        dict: The consumer configuration
+        
+        The consumer configuration must be a ``dict`` in which the keys are the 
+        `consumer configs defined by Kafka <https://kafka.apache.org/23/documentation/#consumerconfigs>`_.
+        A consumer configuration can be created with :func:`create_connection_properties`.
+        The properties given as `consumer_config` override the same properties in an application
+        configuration if present.
+        """
+        return self._consumer_config
+
+    @consumer_config.setter
+    def consumer_config(self, consumer_config):
+        self._consumer_config = consumer_config
+
+    @property
+    def group_id(self):
+        """
+        str: The identifier of a Kafka consumer group. This attribute goes into the ``group.id``
+        consumer config and overrides the same property if given as :attr:`consumer_config`.
+        When no group identifier is given, a group identifier is generated from the job name and the topic.
+        """
+        return self._group_id
+
+    @group_id.setter
+    def group_id(self, group_id):
+        self._group_id = group_id
+
+    @property
+    def group_size(self):
+        """
+        int: The size of a Kafka consumer group, in which multiple consumers share 
+        the partitions of the subscribed topics.
+        
+        With ``group_size`` greater than 1, the 
+        source stream is split into multiple channels as the start of a parallel region.
+        
+        This is effectively the same as ``Stream.set_parallel(width=group_size)``.
+        
+        The parallel region can be ended for example, with ``Stream.end_parallel()``.
+        """
+        return self._group_size
+
+    @group_size.setter
+    def group_size(self, group_size):
+        self._group_size = group_size
+
+    @property
+    def client_id(self):
+        """
+        str: An optional client identifier for Kafka. The client identifier has no 
+        function for the application, but allows to identify the Kafka client within the Kafka server.
+        
+        The client identifier given here overrides the consumer config ``client.id`` if given
+        in an application configuration or within the consumer configuration.
+         
+        .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
+            have a different client identifier.
+       """
+        return self._client_id
+
+    @client_id.setter
+    def client_id(self, client_id):
+        self._client_id = client_id
+
+    def populate(self, topology, name, **options) -> streamsx.topology.topology.Stream:
+        # test mandatory parameters 
+        if self._topic is None:
+            raise TypeError(self._topic)
+        
+        if isinstance(self._topic, str):
+            _topic_tok = self._topic.replace("-", "_")
+        elif isinstance(self._topic, list):
+            # topic list must not be empty
+            if self._topic:
+                _topic_tok = "_".join(self._topic).replace("-", "_")
+            else:
+                raise ValueError('topic must not be an empty list')
+        else:
+            raise TypeError('trusted_cert must be of str or list type')
+
+        if self._app_config_name is None and not self._consumer_config:
+            raise TypeError('one of app_config_name or non-empty consumer_config must be set')
+        if self._group_id is None:
+            self._group_id = streamsx.spl.op.Expression.expression('getJobName() + "_" + "' + str(_topic_tok) + '"')
+
+        propsFilename = None
+        if self._consumer_config:
+            if name is None:
+                fName = 'consumer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            else:
+                fName = 'consumer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            propsFilename = _add_properties_file(topology, self._consumer_config, fName)
+
+        if name is None:
+            name = "KafkaConsumed_" + _topic_tok
+        vmargs = None
+        if self._vm_arg or self._ssl_debug:
+            vmargs = []
+            if isinstance(self._vm_arg, list):
+                vmargs.extend(self._vm_arg)
+            elif isinstance(self._vm_arg, str):
+                vmargs.append(self._vm_arg)
+            if self._ssl_debug:
+                vmargs.append('-Djavax.net.debug=all')
+
+        op = _KafkaConsumer(topology,
+                            schema=self._schema,
+                            vmArg=vmargs,
+                            appConfigName=self._app_config_name,
+                            outputMessageAttributeName=self._msg_attr_name,
+                            propertiesFile=propsFilename,
+                            topic=self._topic, 
+                            groupId=self._group_id,
+                            clientId=self._client_id,
+                            name=name)
+        oStream = op.stream
+        if self._group_size > 1:
+            return oStream.set_parallel(self._group_size)
+        else:
+            return oStream
+
+
+class KafkaProducer(AbstractSink):
+    """
+    The ``KafkaProducer`` represents a stream termination that publishes messages to one or more Kafka topics.
+    Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
+
+    Trivial example::
+    
+        producer = KafkaProducer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic="topic")
+        stream_to_publish.for_each(producer)
+
+    Example with two topics in Event Streams cloud service::
+    
+        eventstreams_credentials_json = "..."
+        producer = KafkaProducer(create_connection_properties_for_eventstreams(eventstreams_credentials_json),
+                                 topic=["topic1", "topic2"])
+        stream_to_publish.for_each(producer)
+    
+    Args:
+        config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
+        topic(str|list): Topic or topics to publish messages
+
+    .. versionadded:: 1.8.0
+    """
+    
+    def __init__(self, config, topic):
+        """
+        Args:
+            config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
+            topic(str|list): Topic or topics to publish messages
+        """
+        if isinstance(config, str):
+            self.app_config_name = config
+            self.producer_config = None
+        elif isinstance(config, dict):
+            self.app_config_name = None
+            self.producer_config = config
+        else:
+            raise TypeError(config)
+        if topic is None:
+            raise TypeError(topic)
+        self.topic = topic
+        self._vm_arg = None
+        self._client_id = None
+        self._ssl_debug = False
+
+        super(KafkaProducer, self).__init__()
+
+    @property
+    def ssl_debug(self):
+        """
+        bool: enables verbose SSL debug output at runtime when SSL connections are used.
+        """
+        return self._ssl_debug
+    
+    @ssl_debug.setter
+    def ssl_debug(self, ssl_debug:bool):
+        self._ssl_debug = ssl_debug
+
+    @property
+    def vm_arg(self):
+        """
+         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
+             For multiple arguments, use a list::
+                 mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
+        """
+        return self._vm_arg
+
+    @vm_arg.setter
+    def vm_arg(self, vm_arg):
+        if vm_arg:
+            self._vm_arg = vm_arg
+
+    @property
+    def app_config_name(self):
+        """
+        str: The name of an application configuration with producer configurations.
+        The application configuration must exist when the topology is submitted.
+        """
+        return self._app_config_name
+
+    @property
+    def producer_config(self):
+        """
+        dict: The producer configuration
+        
+        The producer configuration must be a ``dict`` in which the keys are the 
+        `producer configs defined by Kafka <https://kafka.apache.org/23/documentation/#producerconfigs>`_.
+        A producer configuration can be created with :func:`create_connection_properties`.
+        The properties given as `producer_config` override the same properties in an application
+        configuration if present.
+        """
+        return self._producer_config
+
+    @producer_config.setter
+    def producer_config(self, config):
+        self._producer_config = config
+
+    @property
+    def client_id(self):
+        """
+        str: An optional client identifier for Kafka. The client identifier has no 
+        function for the application, but allows to identify the Kafka client within the Kafka server.
+        
+        The client identifier given here overrides the producer config ``client.id`` if given
+        in an application configuration or within the producer configuration.
+        
+        .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
+            have a different client identifier.
+        """
+        return self._client_id
+
+    @client_id.setter
+    def client_id(self, client_id):
+        self._client_id = client_id
+
+    def populate(self, topology, stream, name, **options) -> streamsx.topology.topology.Sink:
+        # test mandatory parameters 
+        if self._topic is None:
+            raise TypeError(self._topic)
+        
+        if isinstance(self._topic, str):
+            _topic_tok = self._topic.replace("-", "_")
+        elif isinstance(self._topic, list):
+            # topic list must not be empty
+            if self._topic:
+                _topic_tok = "_".join(self._topic).replace("-", "_")
+            else:
+                raise ValueError('topic must not be an empty list')
+        else:
+            raise TypeError('topic must be of str or list type')
+
+        if self._app_config_name is None and not self._producer_config:
+            raise TypeError('one of app_config_name or non-empty producer_config must be set')
+
+        msg_attr_name = None
+        streamSchema = stream.oport.schema
+        if streamSchema is CommonSchema.Json:
+            msg_attr_name = 'jsonString'
+        elif streamSchema is CommonSchema.String:
+            msg_attr_name = 'string'
+        elif streamSchema is Schema.BinaryMessage:
+            # msg_attr_name = 'message'
+            pass
+        elif streamSchema is Schema.StringMessage:
+            # msg_attr_name = 'message'
+            pass
+        else:
+            raise TypeError(streamSchema)
+
+        propsFilename = None
+        if self._producer_config:
+            if name is None:
+                fName = 'producer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            else:
+                fName = 'producer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
+            propsFilename = _add_properties_file(topology, self._producer_config, fName)
+
+        if name is None:
+            name = "KafkaProduced_" + _topic_tok
+        vmargs = None
+        if self._vm_arg or self._ssl_debug:
+            vmargs = []
+            if isinstance(self._vm_arg, list):
+                vmargs.extend(self._vm_arg)
+            elif isinstance(self._vm_arg, str):
+                vmargs.append(self._vm_arg)
+            if self._ssl_debug:
+                vmargs.append('-Djavax.net.debug=all')
+
+        op = _KafkaProducer(stream,
+                            propertiesFile=propsFilename,
+                            vmArg=vmargs,
+                            appConfigName=self._app_config_name,
+                            topic=self._topic,
+                            clientId=self._client_id,
+                            name=name)
+
+        # create the input attribute expressions after operator op initialization
+        if msg_attr_name is not None:
+            op.params['messageAttribute'] = op.attribute(stream, msg_attr_name)
+    #    if keyAttributeName is not None:
+    #        op.params['keyAttribute'] = op.attribute(stream, keyAttributeName)
+    #    if partitionAttributeName is not None:
+    #        op.params['partitionAttribute'] = op.attribute(stream, partitionAttributeName)
+    #    if timestampAttributeName is not None:
+    #        op.params['timestampAttribute'] = op.attribute(stream, timestampAttributeName)
+    #    if topicAttributeName is not None:
+    #        op.params['topicAttribute'] = op.attribute(stream, topicAttributeName)
+        return streamsx.topology.topology.Sink(op)
 
 
 def _try_read_from_file (potential_filename):
@@ -110,68 +549,34 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     Returns:
         dict: A set of keystore relevant properties. They can be used for consumers and producers.
     """
-    _client_cert_pem = _try_read_from_file(client_cert)
-    if not '---BEGIN' in _client_cert_pem:
-        warnings.warn('client certificate ' + client_cert + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
-    _client_key_pem = _try_read_from_file(client_private_key)
-    if not '---BEGIN' in _client_key_pem:
-        warnings.warn('client private key ' + client_private_key + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
-    _passwd = store_passwd
-    if _passwd is None:
-        _passwd = _generate_password()
-    try:
-        _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_client_cert_pem, 'utf-8'))
-        _client_cer_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
-    except OpenSSL.crypto.Error as e:
-        print('Error: Processing client certificate failed.', file=sys.stderr)
-        raise
-    try:
-        _key = OpenSSL.crypto.load_privatekey (OpenSSL.crypto.FILETYPE_PEM, bytes(_client_key_pem, 'utf-8'))
-        _client_key_der = OpenSSL.crypto.dump_privatekey (OpenSSL.crypto.FILETYPE_ASN1, _key)
-    except OpenSSL.crypto.Error as e:
-        print('Error: Processing client private key failed.', file=sys.stderr)
-        raise
-
-    try:
-        privateKeyEntry = jks.PrivateKeyEntry.new("client_cert", [_client_cer_der], _client_key_der, 'rsa_raw')
-    except Exception:
-        print('Error: Processing client private key failed. Not RSA format?', file=sys.stderr)
-        raise
-    
-    if privateKeyEntry.is_decrypted():
-        privateKeyEntry.encrypt(_passwd)
-    keystore = jks.KeyStore.new('jks', [privateKeyEntry])
     # an empty string evaluates to False
     if _storeSuffix:
         _store_filename = 'keystore-' + _storeSuffix + '.jks'
     else:
         _store_filename = 'keystore.jks'
-    if topology is None:
-        if store_dir is None:
-            # save the keystore in current directory
+    if store_dir:
+        _dir = store_dir
+    else:
+        if topology is None:
             _dir = '.'
         else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
+            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+    _filename = os.path.join(_dir, _store_filename)
+    _passwd = store_passwd
+    if _passwd is None or not _passwd.strip():
+        _passwd = _generate_password()
+    streamsx.toolkits.create_keystore(client_cert, client_private_key, _filename, _passwd)
+    print('keystore file ' + _filename + ' generated. Store and key password is ' + _passwd)
+    if topology is None:
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        if store_dir is None:
-            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
-        else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
-        topology.add_file_dependency(filename, 'etc')
-        fName = 'etc/' + _store_filename
-        print("Keystore file " + fName + " added to the topology " + topology.name)
+        topology.add_file_dependency(_filename, 'etc')
+        print("Keystore file etc/" + _store_filename + " added to the topology " + topology.name)
     
     _props = dict()
     _props['ssl.keystore.type'] = 'JKS'
@@ -197,69 +602,34 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     Returns:
         dict: A set of truststore relevant properties. They can be used for consumers and producers.
     """
-    if isinstance(trusted_cert, str):
-        _cert_list = [trusted_cert]
-    elif isinstance(trusted_cert, list):
-        # must not be empty
-        if trusted_cert:
-            _cert_list = trusted_cert
-        else:
-            raise ValueError('trusted_cert must not be an empty list')
-    else:
-        raise TypeError('trusted_cert must be of str or list type')
-    
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
-    _passwd = store_passwd
-    if _passwd is None:
-        _passwd = _generate_password()
-    _storeEntries = list()
-    i = 0
-    for _crt in _cert_list:
-        _ca_cert_pem = _try_read_from_file(_crt)
-        if not '---BEGIN' in _ca_cert_pem:
-            warnings.warn('trusted certificate ' + _crt + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
-        try:
-            _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_ca_cert_pem, 'utf-8'))
-            _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
-        except OpenSSL.crypto.Error as e:
-            print('Error: Processing trusted certificate failed.', file=sys.stderr)
-            raise
-        _alias = 'ca_cert-' + str(i)
-        _store_entry = jks.TrustedCertEntry.new (_alias, _ca_cert_der)
-        _storeEntries.append(_store_entry)
-        i = i + 1
-
-    keystore = jks.KeyStore.new('jks', _storeEntries)
     # an empty string evaluates to False
     if _storeSuffix:
         _store_filename = 'truststore-' + _storeSuffix + '.jks'
     else:
         _store_filename = 'truststore.jks'
-    if topology is None:
-        if store_dir is None:
-            # save the keystore in current directory
+    if store_dir:
+        _dir = store_dir
+    else:
+        if topology is None:
             _dir = '.'
         else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
+            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+    _filename = os.path.join(_dir, _store_filename)
+    _passwd = store_passwd
+    if _passwd is None or not _passwd.strip():
+        _passwd = _generate_password()
+    streamsx.toolkits.create_truststore(trusted_cert, _filename, _passwd)
+    print('truststore file ' + _filename + ' generated. Store password is ' + _passwd)
+    if topology is None:
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        if store_dir is None:
-            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
-        else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
-        topology.add_file_dependency(filename, 'etc')
-        fName = 'etc/' + _store_filename
-        print("Truststore file " + fName + " added to the topology " + topology.name)
+        topology.add_file_dependency(_filename, 'etc')
+        print("Truststore file etc/" + _store_filename + " added to the topology " + topology.name)
     
     _props = dict()
     _props['ssl.truststore.type'] = 'JKS'
@@ -276,7 +646,7 @@ def _create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostna
     """ 
     props = dict()
     _storePasswd = store_pass
-    if _storePasswd is None:
+    if _storePasswd is None or not _storePasswd.strip():
         _storePasswd = _generate_password()
     _storeSuffix = store_suffix
     if _storeSuffix is None:
@@ -531,7 +901,8 @@ def configure_connection_from_properties(instance, name, properties, description
 def create_connection_properties_for_eventstreams(credentials):
     """Create Kafka configuration properties from service credentials for IBM event streams to connect 
     with IBM event streams. The resulting properties can be used for example in 
-    :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
+    :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
+    and as ``producer_properties`` in :py:class:`~KafkaProducer`.
     
     Args:
         credentials(dict|str): The service credentials for IBM event streams as a JSON dict or as string.
@@ -539,7 +910,7 @@ def create_connection_properties_for_eventstreams(credentials):
             must contain the raw JSON credentials.
         
     Returns:
-        dict: Kafka properties than contain the connection information. They can be used for both :func:`subscribe`, and :func:`publish`.
+        dict: Kafka properties that contain the connection information.
         
     .. warning:: The returned properties contain sensitive data. Storing the properties in
         an application configuration is a good idea to avoid exposing sensitive information.
@@ -568,7 +939,8 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
                     client_cert=None, client_private_key=None, username=None, password=None, topology=None):
     """Create Kafka properties that can be used to connect a consumer or a producer with a Kafka cluster
     when certificates and keys or authentication is required. The resulting properties can be used
-    for example in :func:`configure_connection_from_properties`, :func:`subscribe`, or :func:`publish`.
+    for example in :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
+    and as ``producer_properties`` in :py:class:`~KafkaProducer`.
     
     When certificates are given, the function will create a truststore and/or a keystore, 
     which are added as file dependencies to the topology, which must not be ``None`` in this case.
@@ -774,6 +1146,9 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
 
     Returns:
         streamsx.topology.topology.Stream: Stream containing messages.
+
+    .. deprecated:: 1.8.0
+        Use the :py:class:`~KafkaConsumer` to create a source stream from a Kafka subscription.
     """
     if topic is None:
         raise TypeError(topic)
@@ -844,14 +1219,17 @@ def publish(stream, topic, kafka_properties, name=None):
 
     Returns:
         streamsx.topology.topology.Sink: Stream termination.
+
+    .. deprecated:: 1.8.0
+        Use the :py:class:`~KafkaProducer` to terminate a stream by publishing messages to Kafka.
     """
     if topic is None:
         raise TypeError(topic)
     msg_attr_name = None
     streamSchema = stream.oport.schema
-    if streamSchema == CommonSchema.Json:
+    if streamSchema is CommonSchema.Json:
         msg_attr_name = 'jsonString'
-    elif streamSchema == CommonSchema.String:
+    elif streamSchema is CommonSchema.String:
         msg_attr_name = 'string'
     elif streamSchema is Schema.BinaryMessage:
         # msg_attr_name = 'message'
