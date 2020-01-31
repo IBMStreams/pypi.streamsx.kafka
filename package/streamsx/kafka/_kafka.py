@@ -87,6 +87,10 @@ class KafkaConsumer(AbstractSource):
         config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
         topic(str|list): Single topic or list of topics to subscribe messages from
         schema(StreamSchema): Schema for the output stream
+        message_attribute_name(str): the attribute name in the schema that receives the message content of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``message``.
+        key_attribute_name(str): the attribute name in the schema that receives the key of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``key``.
         
             Valid schemas are:
             
@@ -96,11 +100,13 @@ class KafkaConsumer(AbstractSource):
             * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
             * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
             * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+            * User defined schemas. When user defined schemas are used, the attributes names for message and key must be given
+                if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
 
     .. versionadded:: 1.8.0
     """
     
-    def __init__(self, config, topic, schema):
+    def __init__(self, config, topic, schema, message_attribute_name=None, key_attribute_name=None):
         """
         Args:
             config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
@@ -108,10 +114,10 @@ class KafkaConsumer(AbstractSource):
             schema(StreamSchema): Schema for the output stream
         """
         if isinstance(config, str):
-            self.app_config_name = config
+            self._app_config_name = config
             self.consumer_config = None
         elif isinstance(config, dict):
-            self.app_config_name = None
+            self._app_config_name = None
             self.consumer_config = config
         else:
             raise TypeError(config)
@@ -119,28 +125,31 @@ class KafkaConsumer(AbstractSource):
             raise TypeError(topic)
         self._topic = topic
         
+        self._key_attr_name = None
         self._msg_attr_name = None
         if schema is CommonSchema.Json:
             self._msg_attr_name='jsonString'
         elif schema is CommonSchema.String:
             self._msg_attr_name='string'
         elif schema is Schema.BinaryMessage:
-            # msg_attr_name = 'message'
+            # self._msg_attr_name = 'message'
             pass
         elif schema is Schema.StringMessage:
-            # msg_attr_name = 'message'
+            # self._msg_attr_name = 'message'
             pass
         elif schema is Schema.BinaryMessageMeta:
-            # msg_attr_name = 'message'
+            # self._msg_attr_name = 'message'
             pass
         elif schema is Schema.StringMessageMeta:
-            # msg_attr_name = 'message'
+            # self._msg_attr_name = 'message'
             pass
         else:
-            raise TypeError(schema)
+            if message_attribute_name:
+                self._msg_attr_name = _check_non_whitespace_string(message_attribute_name)
+            if key_attribute_name:
+                self._key_attr_name =  _check_non_whitespace_string(key_attribute_name)
         
         self._schema = schema
-
         self._vm_arg = None
         self._group_id = None
         self._group_size = 1
@@ -292,6 +301,7 @@ class KafkaConsumer(AbstractSource):
                             vmArg=vmargs,
                             appConfigName=self._app_config_name,
                             outputMessageAttributeName=self._msg_attr_name,
+                            outputKeyAttributeName=self._key_attr_name,
                             propertiesFile=propsFilename,
                             topic=self._topic, 
                             groupId=self._group_id,
@@ -325,32 +335,42 @@ class KafkaProducer(AbstractSink):
     Args:
         config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
         topic(str|list): Topic or topics to publish messages
+        message_attribute_name(str): the attribute name in the schema that is used as the message to publish.
+            Required for user-defined schema when the attribute name is different from ``message``.
+        key_attribute_name(str): the attribute name in the schema that is used as the key for the Kafka message to publish.
+            Required for user-defined schema when the attribute name is different from ``key``.
 
     .. versionadded:: 1.8.0
     """
     
-    def __init__(self, config, topic):
+    def __init__(self, config, topic, message_attribute_name=None, key_attribute_name=None):
         """
         Args:
             config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
             topic(str|list): Topic or topics to publish messages
         """
         if isinstance(config, str):
-            self.app_config_name = config
+            self._app_config_name = config
             self.producer_config = None
         elif isinstance(config, dict):
-            self.app_config_name = None
+            self._app_config_name = None
             self.producer_config = config
         else:
             raise TypeError(config)
         if topic is None:
             raise TypeError(topic)
-        self.topic = topic
+        self._msg_attr_name = None
+        self._key_attr_name = None
+        if message_attribute_name:
+            self._msg_attr_name = _check_non_whitespace_string(message_attribute_name)
+        if key_attribute_name:
+            self._key_attr_name = _check_non_whitespace_string(key_attribute_name)
+        self._topic = topic
         self._vm_arg = None
         self._client_id = None
         self._ssl_debug = False
-
         super(KafkaProducer, self).__init__()
+
 
     @property
     def ssl_debug(self):
@@ -440,6 +460,7 @@ class KafkaProducer(AbstractSink):
             raise TypeError('one of app_config_name or non-empty producer_config must be set')
 
         msg_attr_name = None
+        key_attr_name = None
         streamSchema = stream.oport.schema
         if streamSchema is CommonSchema.Json:
             msg_attr_name = 'jsonString'
@@ -451,8 +472,15 @@ class KafkaProducer(AbstractSink):
         elif streamSchema is Schema.StringMessage:
             # msg_attr_name = 'message'
             pass
+        elif streamSchema is Schema.BinaryMessageMeta:
+            # msg_attr_name = 'message'
+            pass
+        elif streamSchema is Schema.StringMessageMeta:
+            # msg_attr_name = 'message'
+            pass
         else:
-            raise TypeError(streamSchema)
+            msg_attr_name = self._msg_attr_name
+            key_attr_name = self._key_attr_name
 
         propsFilename = None
         if self._producer_config:
@@ -485,8 +513,8 @@ class KafkaProducer(AbstractSink):
         # create the input attribute expressions after operator op initialization
         if msg_attr_name is not None:
             op.params['messageAttribute'] = op.attribute(stream, msg_attr_name)
-    #    if keyAttributeName is not None:
-    #        op.params['keyAttribute'] = op.attribute(stream, keyAttributeName)
+        if key_attr_name is not None:
+            op.params['keyAttribute'] = op.attribute(stream, key_attr_name)
     #    if partitionAttributeName is not None:
     #        op.params['partitionAttribute'] = op.attribute(stream, partitionAttributeName)
     #    if timestampAttributeName is not None:
@@ -494,6 +522,19 @@ class KafkaProducer(AbstractSink):
     #    if topicAttributeName is not None:
     #        op.params['topicAttribute'] = op.attribute(stream, topicAttributeName)
         return streamsx.topology.topology.Sink(op)
+
+
+def _check_non_whitespace_string(s):
+    """checks s for being a non-space-only or non-empty string.
+    Returns:
+         s.trim()
+    """
+    if not isinstance(s, str):
+        raise TypeError('unexpected type {}. Must be str.'.format(type(s)))
+    _s = s.strip()
+    if not _s:
+        raise ValueError(_s)
+    return _s
 
 
 def _try_read_from_file (potential_filename):
