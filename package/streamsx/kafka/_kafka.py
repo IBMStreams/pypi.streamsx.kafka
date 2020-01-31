@@ -15,15 +15,13 @@ import json
 from builtins import str
 from enum import Enum
 import datetime
-import jks
-import OpenSSL
 import os
 import sys
 import warnings
 import string
 import random
 from fileinput import filename
-from streamsx.toolkits import download_toolkit
+from streamsx.toolkits import download_toolkit, create_keystore, create_truststore
 
 _TOOLKIT_NAME = 'com.ibm.streamsx.kafka'
 
@@ -551,68 +549,34 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     Returns:
         dict: A set of keystore relevant properties. They can be used for consumers and producers.
     """
-    _client_cert_pem = _try_read_from_file(client_cert)
-    if not '---BEGIN' in _client_cert_pem:
-        warnings.warn('client certificate ' + client_cert + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
-    _client_key_pem = _try_read_from_file(client_private_key)
-    if not '---BEGIN' in _client_key_pem:
-        warnings.warn('client private key ' + client_private_key + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
-    _passwd = store_passwd
-    if _passwd is None:
-        _passwd = _generate_password()
-    try:
-        _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_client_cert_pem, 'utf-8'))
-        _client_cer_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
-    except OpenSSL.crypto.Error as e:
-        print('Error: Processing client certificate failed.', file=sys.stderr)
-        raise
-    try:
-        _key = OpenSSL.crypto.load_privatekey (OpenSSL.crypto.FILETYPE_PEM, bytes(_client_key_pem, 'utf-8'))
-        _client_key_der = OpenSSL.crypto.dump_privatekey (OpenSSL.crypto.FILETYPE_ASN1, _key)
-    except OpenSSL.crypto.Error as e:
-        print('Error: Processing client private key failed.', file=sys.stderr)
-        raise
-
-    try:
-        privateKeyEntry = jks.PrivateKeyEntry.new("client_cert", [_client_cer_der], _client_key_der, 'rsa_raw')
-    except Exception:
-        print('Error: Processing client private key failed. Not RSA format?', file=sys.stderr)
-        raise
-    
-    if privateKeyEntry.is_decrypted():
-        privateKeyEntry.encrypt(_passwd)
-    keystore = jks.KeyStore.new('jks', [privateKeyEntry])
     # an empty string evaluates to False
     if _storeSuffix:
         _store_filename = 'keystore-' + _storeSuffix + '.jks'
     else:
         _store_filename = 'keystore.jks'
-    if topology is None:
-        if store_dir is None:
-            # save the keystore in current directory
+    if store_dir:
+        _dir = store_dir
+    else:
+        if topology is None:
             _dir = '.'
         else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
+            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+    _filename = os.path.join(_dir, _store_filename)
+    _passwd = store_passwd
+    if _passwd is None or not _passwd.strip():
+        _passwd = _generate_password()
+    streamsx.toolkits.create_keystore(client_cert, client_private_key, _filename, _passwd)
+    print('keystore file ' + _filename + ' generated. Store and key password is ' + _passwd)
+    if topology is None:
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        if store_dir is None:
-            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
-        else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('keystore file ' + filename + ' generated. Store and key password is ' + _passwd)
-        topology.add_file_dependency(filename, 'etc')
-        fName = 'etc/' + _store_filename
-        print("Keystore file " + fName + " added to the topology " + topology.name)
+        topology.add_file_dependency(_filename, 'etc')
+        print("Keystore file etc/" + _store_filename + " added to the topology " + topology.name)
     
     _props = dict()
     _props['ssl.keystore.type'] = 'JKS'
@@ -638,69 +602,34 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     Returns:
         dict: A set of truststore relevant properties. They can be used for consumers and producers.
     """
-    if isinstance(trusted_cert, str):
-        _cert_list = [trusted_cert]
-    elif isinstance(trusted_cert, list):
-        # must not be empty
-        if trusted_cert:
-            _cert_list = trusted_cert
-        else:
-            raise ValueError('trusted_cert must not be an empty list')
-    else:
-        raise TypeError('trusted_cert must be of str or list type')
-    
     _storeSuffix = store_suffix
     if _storeSuffix is None:
         _storeSuffix = _generate_random_digits()
     else:
         _storeSuffix = _storeSuffix.strip()
-    _passwd = store_passwd
-    if _passwd is None:
-        _passwd = _generate_password()
-    _storeEntries = list()
-    i = 0
-    for _crt in _cert_list:
-        _ca_cert_pem = _try_read_from_file(_crt)
-        if not '---BEGIN' in _ca_cert_pem:
-            warnings.warn('trusted certificate ' + _crt + ' does not look like in PEM format; no BEGIN anchor found', stacklevel=3)
-        try:
-            _cert = OpenSSL.crypto.load_certificate (OpenSSL.crypto.FILETYPE_PEM, bytes(_ca_cert_pem, 'utf-8'))
-            _ca_cert_der = OpenSSL.crypto.dump_certificate (OpenSSL.crypto.FILETYPE_ASN1, _cert)
-        except OpenSSL.crypto.Error as e:
-            print('Error: Processing trusted certificate failed.', file=sys.stderr)
-            raise
-        _alias = 'ca_cert-' + str(i)
-        _store_entry = jks.TrustedCertEntry.new (_alias, _ca_cert_der)
-        _storeEntries.append(_store_entry)
-        i = i + 1
-
-    keystore = jks.KeyStore.new('jks', _storeEntries)
     # an empty string evaluates to False
     if _storeSuffix:
         _store_filename = 'truststore-' + _storeSuffix + '.jks'
     else:
         _store_filename = 'truststore.jks'
-    if topology is None:
-        if store_dir is None:
-            # save the keystore in current directory
+    if store_dir:
+        _dir = store_dir
+    else:
+        if topology is None:
             _dir = '.'
         else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
+            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
+    _filename = os.path.join(_dir, _store_filename)
+    _passwd = store_passwd
+    if _passwd is None or not _passwd.strip():
+        _passwd = _generate_password()
+    streamsx.toolkits.create_truststore(trusted_cert, _filename, _passwd)
+    print('truststore file ' + _filename + ' generated. Store password is ' + _passwd)
+    if topology is None:
         print('Copy this file into the etc/ directory of your Streams application.')
     else:
-        if store_dir is None:
-            _dir = _test_dsx_dataset_dir_and_get(gettempdir())
-        else:
-            _dir = store_dir
-        filename = os.path.join(_dir, _store_filename)
-        keystore.save(filename, _passwd)
-        print('truststore file ' + filename + ' generated. Store password is ' + _passwd)
-        topology.add_file_dependency(filename, 'etc')
-        fName = 'etc/' + _store_filename
-        print("Truststore file " + fName + " added to the topology " + topology.name)
+        topology.add_file_dependency(_filename, 'etc')
+        print("Truststore file etc/" + _store_filename + " added to the topology " + topology.name)
     
     _props = dict()
     _props['ssl.truststore.type'] = 'JKS'
@@ -717,7 +646,7 @@ def _create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostna
     """ 
     props = dict()
     _storePasswd = store_pass
-    if _storePasswd is None:
+    if _storePasswd is None or not _storePasswd.strip():
         _storePasswd = _generate_password()
     _storeSuffix = store_suffix
     if _storeSuffix is None:
