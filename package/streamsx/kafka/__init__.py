@@ -116,14 +116,15 @@ Messages
 
 The schema of the stream defines how messages are handled.
 
-* ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
-* ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+* ``CommonSchema.String`` - Each message is a UTF-8 encoded string. No key is used.
+* ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object. No key is used.
 * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
 * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
 * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
 * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
 
-No other formats are supported.
+When other schemas are used, the attribute names for the message and the message
+key must be specified when they have not the default names ``message`` or ``key``, respectively.
 
 Sample
 ++++++
