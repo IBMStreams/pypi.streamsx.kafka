@@ -812,7 +812,7 @@ def _write_properties_file(properties, file_name=None):
     """
     with sys.stdout if file_name is None else open(file_name, "w") as properties_file:
         for key, value in properties.items():
-            properties_file.write(key + '=' + value + '\n')
+            properties_file.write(key + '=' + str(value) + '\n')
 
 def _add_properties_file(topology, properties, file_name):
     """
@@ -993,7 +993,10 @@ def configure_connection_from_properties(instance, name, properties, description
         raise TypeError(name)
     if properties is None or not isinstance(properties, dict):
         raise TypeError(properties)
-    
+    # stringify property values:
+    _properties = dict()
+    for k, v in properties.items():
+        _properties[k] = str(v)
     _description = description
     if _description is None:
         _description = 'Kafka configurations'
@@ -1004,14 +1007,14 @@ def configure_connection_from_properties(instance, name, properties, description
         # set the values to None for the keys which are not present in the new property set any more...
         oldProperties = app_config[0].properties
         for key, value in oldProperties.items():
-            if not key in properties:
+            if not key in _properties:
                 # set None to delete the property in the application config
-                properties[key] = None
+                _properties[key] = None
         print('update application configuration: ' + name)
-        app_config[0].update(properties)
+        app_config[0].update(_properties)
     else:
         print('create application configuration: ' + name)
-        instance.create_application_configuration(name, properties, _description)
+        instance.create_application_configuration(name, _properties, _description)
     
     return name
 
