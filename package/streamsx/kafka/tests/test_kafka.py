@@ -9,7 +9,9 @@ from streamsx.kafka.tests.x509_certs import TRUSTED_CERT_PEM, PRIVATE_KEY_PEM, C
 
 from streamsx.topology.topology import Topology
 from streamsx.topology.tester import Tester
+from streamsx.topology.context import ContextTypes
 from streamsx.topology.schema import CommonSchema, StreamSchema
+from streamsx.kafka import KafkaConsumer, KafkaProducer
 from streamsx.kafka.schema import Schema as MsgSchema
 import streamsx.spl.toolkit
 
@@ -24,6 +26,7 @@ from tempfile import gettempdir
 import glob
 import shutil
 from posix import remove
+import typing
 
 ##
 ## Test assumptions
@@ -58,7 +61,12 @@ def _write_text_file(text):
         return filename
     finally:
         f.close()
- 
+
+
+#class StrConsumerSchema(typing.NamedTuple):
+#    kafka_msg: str
+#    kafka_key: str
+
 
 class TestSubscribeParams(TestCase):
     def test_schemas_ok(self):
@@ -124,9 +132,37 @@ class TestPublishParams(TestCase):
         kafka.publish (jsonStream, 'Topic', properties, name = 'Publish-1')
         kafka.publish (jsonStream, 'Topic', 'AppConfig', name = 'Publish-2')
 
+class TestCreatePropertyFile(TestCase):
+    def setUp(self):
+        TestCase.setUp(self)
+        self.filename = None
+        
+    def tearDown(self):
+        TestCase.tearDown(self)
+        if self.filename:
+            os.remove(self.filename)
+            pass
 
+    def test_write_ints_and_strings(self):
+        props = dict()
+        buf_mem = 32000000
+        props['bootstrap.servers'] = 'host1.domain:9092,host2.domain:9092'
+        props['acks'] = -1
+        props['buffer.memory'] = buf_mem
+        props['batch.size'] = '16384'
+        self.filename = os.path.join(gettempdir(), 'TestCreatePropertyFile-' + ''.join(random.choice(string.digits) for _ in range(20)) + '.properties')
+        kafka._kafka._write_properties_file(props, self.filename)
+        read_props = _get_properties(self.filename)
+        # stringify values
+        expected_props = dict()
+        for k, v in props.items():
+            expected_props[k] = str(v)
+        self.assertDictEqual(read_props, expected_props)
+        
+        
 class TestCreateConnectionProperties(TestCase):
     def setUp(self):
+        TestCase.setUp(self)
         self.ca_crt_file = _write_text_file (TRUSTED_CERT_PEM)
         self.client_ca_crt_file = _write_text_file (CLIENT_CA_CERT_PEM)
         self.client_crt_file = _write_text_file (CLIENT_CERT_PEM)
@@ -409,6 +445,294 @@ class TestCreateConnectionProperties(TestCase):
                                              'ssl.keystore.type': 'JKS'
                                              }))
 
+class TestKafkaConsumer(TestCase):
+    def setUp(self):
+        TestCase.setUp(self)
+        self.toolkit_root = None
+        self.jobConfigPath = None
+        self.bundlePath = None
+        self.schema = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str)])
+        self.keep_results = False
+
+    def tearDown(self):
+        if not self.keep_results:
+            if self.toolkit_root:
+                shutil.rmtree(self.toolkit_root)
+            if self.jobConfigPath:
+                os.remove(self.jobConfigPath)
+            if self.bundlePath:
+                os.remove(self.bundlePath)
+        
+    def _build_only(self, topo):
+        result = streamsx.topology.context.submit(ContextTypes.TOOLKIT, topo)
+        if self.keep_results:
+            print(topo.name + ' (TOOLKIT):' + str(result))
+        assert(result.return_code == 0)
+        self.toolkit_root = result.toolkitRoot
+
+        result = streamsx.topology.context.submit(ContextTypes.BUNDLE, topo)
+        if self.keep_results:
+            print(topo.name + ' (BUNDLE):' + str(result))
+        assert(result.return_code == 0)
+        self.jobConfigPath = result.jobConfigPath
+        self.bundlePath = result.bundlePath
+    
+    def test_instantiate_conf_dict(self):
+        inst = KafkaConsumer({'bootstrap.servers':'localhost:9999'}, 'topic1', MsgSchema.BinaryMessage, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertTrue(inst._schema is MsgSchema.BinaryMessage)
+        self.assertIsNone(inst.app_config_name)
+        self.assertIsNone(inst._msg_attr_name)
+        self.assertIsNone(inst._key_attr_name)
+        self.assertDictEqual(inst.consumer_config, {'bootstrap.servers':'localhost:9999'})
+
+    def test_instantiate_conf_str(self):
+        inst = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertIsNotNone(inst._schema)
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertEqual(inst._msg_attr_name, 'kafka_msg')
+        self.assertEqual(inst._key_attr_name, 'kafka_key')
+        self.assertIsNone(inst.consumer_config)
+
+    def test_instantiate_conf_str_opt_consumer_config(self):
+        inst = KafkaConsumer('appconfig', ['topic1', 'topic2'], MsgSchema.BinaryMessage, consumer_config={'max.partition.fetch.bytes':'65536'})
+        self.assertListEqual(inst._topic, ['topic1', 'topic2'])
+        self.assertTrue(inst._schema is MsgSchema.BinaryMessage)
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertDictEqual(inst.consumer_config, {'max.partition.fetch.bytes':'65536'})
+
+    def test_instantiate_conf_dict_opt_consumer_config(self):
+        inst = KafkaConsumer({'bootstrap.servers':'localhost:9999', 'session.timeout.ms':12345}, ['topic1', 'topic2'], MsgSchema.BinaryMessage, consumer_config={'session.timeout.ms':240000, 'max.poll.records':2345})
+        self.assertListEqual(inst._topic, ['topic1', 'topic2'])
+        self.assertTrue(inst._schema is MsgSchema.BinaryMessage)
+        self.assertIsNone(inst.app_config_name)
+        self.assertDictEqual(inst.consumer_config, {'bootstrap.servers':'localhost:9999', 'max.poll.records':2345, 'session.timeout.ms':240000})
+    
+    def test_instantiate_kwargs(self):
+        inst = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessage,
+                             #kwargs except consumer_config
+                             group_size=3,
+                             group_id='gid333',
+                             client_id='my_client_id',
+                             vm_arg=['-Xms=345m', '-Xmx4G'],
+                             ignored='must go into a warning',
+                             ssl_debug=True)
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertIsNotNone(inst._schema)
+        self.assertIsNone(inst.consumer_config)
+        self.assertEqual(inst.group_size, 3)
+        self.assertEqual(inst.group_id, 'gid333')
+        self.assertEqual(inst.client_id, 'my_client_id')
+        self.assertListEqual(inst.vm_arg, ['-Xms=345m', '-Xmx4G'])
+        self.assertEqual(inst.ssl_debug, True)
+
+    def test_schema(self):
+        #StrConsumerSchema = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str)])
+        c = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessage)
+        c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessageMeta)
+        c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessage)
+        c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessageMeta)
+        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.String)
+        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Json)
+        c = KafkaConsumer('appconfig', 'topic1', StreamSchema('tuple<int32 key,rstring message>'), message_attribute_name='message', key_attribute_name='key')
+        self.assertEqual(c._msg_attr_name, 'message')
+        self.assertEqual(c._key_attr_name, 'key')
+        c = KafkaConsumer('appconfig', 'topic1', 'tuple<rstring message,rstring key>', message_attribute_name='message', key_attribute_name='key')
+        self.assertEqual(c._msg_attr_name, 'message')
+        self.assertEqual(c._key_attr_name, 'key')
+        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Binary)
+        
+    def test_schema_bad(self):
+        # constructor tests
+        self.assertRaises(TypeError, KafkaConsumer, config='appconfig', topic='topic1', schema=CommonSchema.XML)
+        self.assertRaises(TypeError, KafkaConsumer, config='appconfig', topic='topic1', schema=CommonSchema.Python)
+        
+    def test_compile_user_schema(self):
+        c = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        c.vm_arg = '-Xmx2G'
+        c.ssl_debug = True
+        c.group_size = 3
+        c.consumer_config = {'bootstrap.servers':'localhost:9092'}
+        topology = Topology('test_compile_user_schema')
+        msgs = topology.source(c, 'Messages')
+        msgs.end_parallel().print()
+        self._build_only(topology)
+
+    def test_compile_commonschema_binary(self):
+        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Binary)
+        topology = Topology('test_compile_commonschema_binary')
+        msgs = topology.source(c, 'Messages')
+        self._build_only(topology)
+
+    def test_compile_spl_schema(self):
+        c = KafkaConsumer('appconfig', 'topic1', 'tuple<rstring m, int64 k>', message_attribute_name='m', key_attribute_name='k')
+        topology = Topology('test_compile_spl_schema')
+        msgs = topology.source(c, 'Messages')
+        self._build_only(topology)
+
+
+class TestKafkaProducer(TestCase):
+    def setUp(self):
+        TestCase.setUp(self)
+        self.toolkit_root = None
+        self.jobConfigPath = None
+        self.bundlePath = None
+        self.schema = typing.NamedTuple('StrProducerSchema', [('kafka_msg', str), ('kafka_key', str)])
+        self.keep_results = False
+
+    def tearDown(self):
+        if not self.keep_results:
+            if self.toolkit_root:
+                shutil.rmtree(self.toolkit_root)
+            if self.jobConfigPath:
+                os.remove(self.jobConfigPath)
+            if self.bundlePath:
+                os.remove(self.bundlePath)
+        
+    def _build_only(self, topo):
+        result = streamsx.topology.context.submit(ContextTypes.TOOLKIT, topo)
+        if self.keep_results:
+            print(topo.name + ' (TOOLKIT):' + str(result))
+        assert(result.return_code == 0)
+        self.toolkit_root = result.toolkitRoot
+
+        result = streamsx.topology.context.submit(ContextTypes.BUNDLE, topo)
+        if self.keep_results:
+            print(topo.name + ' (BUNDLE):' + str(result))
+        assert(result.return_code == 0)
+        self.jobConfigPath = result.jobConfigPath
+        self.bundlePath = result.bundlePath
+    
+    def test_instantiate_conf_dict(self):
+        inst = KafkaProducer({'bootstrap.servers':'localhost:9999'}, 'topic1', message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertIsNone(inst.app_config_name)
+        self.assertEqual(inst._msg_attr_name, 'kafka_msg')
+        self.assertEqual(inst._key_attr_name, 'kafka_key')
+        self.assertDictEqual(inst.producer_config, {'bootstrap.servers':'localhost:9999'})
+
+    def test_instantiate_conf_str(self):
+        inst = KafkaProducer('appconfig', 'topic1')
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertIsNone(inst._msg_attr_name)
+        self.assertIsNone(inst._key_attr_name)
+        self.assertIsNone(inst.producer_config)
+
+    def test_instantiate_conf_str_opt_consumer_config(self):
+        inst = KafkaProducer('appconfig', ['topic1', 'topic2'], producer_config={'acks':'all'})
+        self.assertListEqual(inst._topic, ['topic1', 'topic2'])
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertDictEqual(inst.producer_config, {'acks':'all'})
+
+    def test_instantiate_conf_dict_opt_consumer_config(self):
+        inst = KafkaProducer({'bootstrap.servers':'localhost:9999', 'compression.type':'gzip'}, ['topic1', 'topic2'], producer_config={'compression.type':'snappy', 'retries':42})
+        self.assertListEqual(inst._topic, ['topic1', 'topic2'])
+        self.assertIsNone(inst.app_config_name)
+        self.assertDictEqual(inst.producer_config, {'bootstrap.servers':'localhost:9999', 'compression.type':'snappy', 'retries':42})
+    
+    def test_instantiate_kwargs(self):
+        inst = KafkaProducer('appconfig', 'topic1',
+                             #kwargs except producer_config
+                             ignored='must go into a warning',
+                             client_id='my_client_id',
+                             vm_arg=['-Xms=345m', '-Xmx4G'],
+                             ssl_debug=True)
+        self.assertEqual(inst._topic, 'topic1')
+        self.assertEqual(inst.app_config_name, 'appconfig')
+        self.assertIsNone(inst.producer_config)
+        self.assertIsNone(inst._msg_attr_name)
+        self.assertIsNone(inst._key_attr_name)
+        self.assertEqual(inst.client_id, 'my_client_id')
+        self.assertListEqual(inst.vm_arg, ['-Xms=345m', '-Xmx4G'])
+        self.assertEqual(inst.ssl_debug, True)
+
+    def test_schema(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        
+        jsonStream = pyObjStream.as_json()
+        jsonStream.for_each(KafkaProducer('json', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+
+        stringStream = pyObjStream.as_string()
+        stringStream.for_each(KafkaProducer('string', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        
+        binStream = pyObjStream.map (func=lambda s: bytes(s, utf-8), schema=CommonSchema.Binary)
+        binStream.for_each(KafkaProducer('binary', 'TOPIC'))
+        
+        binMsgStream = pyObjStream.map(func=lambda s: {'binary': bytes(s, 'utf-8'), 'key': s}, schema=MsgSchema.BinaryMessage)
+        binMsgStream.for_each(KafkaProducer('BinaryMessage', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        
+        strMsgStream = pyObjStream.map(func=lambda s: {'message': s, 'key': s}, schema=MsgSchema.StringMessage)
+        strMsgStream.for_each(KafkaProducer('StringMessage', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        
+        userMsgStream = pyObjStream.map(func=lambda s: {'kafka_msg': s, 'kafka_key':s}, schema=self.schema)
+        userMsgStream.for_each(KafkaProducer('namedTuple', 'TOPIC', message_attribute_name='kafka_msg', key_attribute_name='kafka_key'))
+        
+        splMsgStream = pyObjStream.map(func=lambda s: {'m':s, 'k':s}, schema='tuple<rstring m, int64 k>')
+        splMsgStream.for_each(KafkaProducer('spl', 'TOPIC', message_attribute_name='m', key_attribute_name='k'))
+#        self._build_only(topo)
+
+    def test_schema_bad(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        self.assertRaises(TypeError, pyObjStream.for_each, KafkaProducer('py', 'TOPIC'))
+
+        xmlStream = pyObjStream.map (schema=CommonSchema.XML)
+        self.assertRaises(TypeError, xmlStream.for_each, KafkaProducer('xml', 'TOPIC'))
+
+    def test_compile_user_schema(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        
+        userMsgStream = pyObjStream.map(func=lambda s: {'kafka_msg': s, 'kafka_key':s}, schema=self.schema)
+        userMsgStream.for_each(KafkaProducer('namedTuple', 'TOPIC', message_attribute_name='kafka_msg', key_attribute_name='kafka_key'))
+        
+        splMsgStream = pyObjStream.map(func=lambda s: {'m':s, 'k':s}, schema='tuple<rstring m, int64 k>')
+        splMsgStream.for_each(KafkaProducer('spl', 'TOPIC', message_attribute_name='m', key_attribute_name='k'))
+        self._build_only(topo)
+
+    def test_compile_BinaryMessage(self):
+        topo = Topology()
+        binStream = topo.source(KafkaConsumer(config='appcfg',
+                                              topic=['t1', 't2', 't3'],
+                                              schema=MsgSchema.BinaryMessage))
+        # tuple<blob message, rstring key>
+        binStream.for_each(KafkaProducer('BinaryMessage', 'dest_TOPIC'))
+        self._build_only(topo)
+
+    def test_compile_StringMessage(self):
+        topo = Topology()
+        binStream = topo.source(KafkaConsumer(config='appcfg',
+                                              topic=['t1', 't2', 't3'],
+                                              schema=MsgSchema.StringMessage))
+        # tuple<blob message, rstring key>
+        binStream.for_each(KafkaProducer('StringMessageMeta', 'dest_TOPIC'))
+        self._build_only(topo)
+
+    def test_compile_commonschema_binary(self):
+        topo = Topology()
+        binStream = topo.source(KafkaConsumer(config='appcfg',
+                                              topic=['t1', 't2', 't3'],
+                                              schema=CommonSchema.Binary))
+        # tuple<blob message, rstring key>
+        binStream.for_each(KafkaProducer('Binary', 'dest_TOPIC'))
+        self._build_only(topo)
+
+    def test_compile_commonschema_string_json(self):
+        topo = Topology()
+        pyObjStream = topo.source(['Hello', 'World!'])
+        
+        jsonStream = pyObjStream.as_json()
+        jsonStream.for_each(KafkaProducer('json', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+
+        stringStream = pyObjStream.as_string()
+        stringStream.for_each(KafkaProducer('string', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+
+        self._build_only(topo)
 
 
 class TestDownloadToolkit(TestCase):
@@ -495,9 +819,9 @@ def add_pip_toolkits(topo):
 
 class TestKafka(TestCase):
     def setUp(self):
+        TestCase.setUp(self)
         Tester.setup_distributed (self)
         self.test_config[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
-
 
     def test_json_appconfig (self):
         n = 104
