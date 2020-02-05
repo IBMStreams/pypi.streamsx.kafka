@@ -96,23 +96,27 @@ class KafkaConsumer(AbstractSource):
             
             * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
             * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
+            * ``CommonSchema.Binary`` - Each message is binary object (byte array).
             * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
             * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
             * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
             * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
             * User defined schemas. When user defined schemas are used, the attributes names for message and key must be given
-                if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
-
+            if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
+        **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
+        
+            * ssl_debug
+            * vm_arg
+            * group_id
+            * group_size
+            * client_id
+            * consumer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
+                This applies also for configs stored in an application configuration.
+        
     .. versionadded:: 1.8.0
     """
     
-    def __init__(self, config, topic, schema, message_attribute_name=None, key_attribute_name=None):
-        """
-        Args:
-            config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
-            topic(str|list): Topic or topics to subscribe messages from
-            schema(StreamSchema): Schema for the output stream
-        """
+    def __init__(self, config, topic, schema, message_attribute_name=None, key_attribute_name=None, **options):
         if isinstance(config, str):
             self._app_config_name = config
             self.consumer_config = None
@@ -127,10 +131,17 @@ class KafkaConsumer(AbstractSource):
         
         self._key_attr_name = None
         self._msg_attr_name = None
-        if schema is CommonSchema.Json:
-            self._msg_attr_name='jsonString'
+        if schema is CommonSchema.Python:
+            self._msg_attr_name = '__spl_po'
+            raise TypeError('CommonSchema.Python is not supported')
+        elif schema is CommonSchema.XML:
+            raise TypeError('CommonSchema.XML is not supported')
+        elif schema is CommonSchema.Json:
+            self._msg_attr_name = 'jsonString'
         elif schema is CommonSchema.String:
-            self._msg_attr_name='string'
+            self._msg_attr_name = 'string'
+        elif schema is CommonSchema.Binary:
+            self._msg_attr_name = 'binary'
         elif schema is Schema.BinaryMessage:
             # self._msg_attr_name = 'message'
             pass
@@ -156,6 +167,35 @@ class KafkaConsumer(AbstractSource):
         self._client_id = None
         self._ssl_debug = False
         super(KafkaConsumer, self).__init__()
+        opts = dict(options)
+        if 'vm_arg' in options:
+            self.vm_arg = options.get('vm_arg')
+            del opts['vm_arg']
+        if 'ssl_debug' in options:
+            self.ssl_debug = options.get('ssl_debug')
+            del opts['ssl_debug']
+        if 'client_id' in options:
+            self.client_id = options.get('client_id')
+            del opts['client_id']
+        if 'group_id' in options:
+            self.group_id = options.get('group_id')
+            del opts['group_id']
+        if 'group_size' in options:
+            self.group_size = options.get('group_size')
+            del opts['group_size']
+        if 'consumer_config' in options:
+            _option_cfg = options.get('consumer_config')
+            if self._consumer_config is _option_cfg:
+                # object identity
+                pass
+            else:
+                if self._consumer_config is None:
+                    self._consumer_config = _option_cfg
+                else:
+                    self._consumer_config.update(_option_cfg)
+            del opts['consumer_config']
+        if opts:
+            warnings.warn('ignored options: {}'.format(str(opts)), category=None, stacklevel=3)
 
     @property
     def ssl_debug(self):
@@ -339,11 +379,18 @@ class KafkaProducer(AbstractSink):
             Required for user-defined schema when the attribute name is different from ``message``.
         key_attribute_name(str): the attribute name in the schema that is used as the key for the Kafka message to publish.
             Required for user-defined schema when the attribute name is different from ``key``.
+        **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
+        
+            * ssl_debug
+            * vm_arg
+            * client_id
+            * producer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
+                This applies also for configs stored in an application configuration.
 
     .. versionadded:: 1.8.0
     """
     
-    def __init__(self, config, topic, message_attribute_name=None, key_attribute_name=None):
+    def __init__(self, config, topic, message_attribute_name=None, key_attribute_name=None, **options):
         """
         Args:
             config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
@@ -370,6 +417,29 @@ class KafkaProducer(AbstractSink):
         self._client_id = None
         self._ssl_debug = False
         super(KafkaProducer, self).__init__()
+        opts = dict(options)
+        if 'vm_arg' in options:
+            self.vm_arg = options.get('vm_arg')
+            del opts['vm_arg']
+        if 'ssl_debug' in options:
+            self.ssl_debug = options.get('ssl_debug')
+            del opts['ssl_debug']
+        if 'client_id' in options:
+            self.client_id = options.get('client_id')
+            del opts['client_id']
+        if 'producer_config' in options:
+            _option_cfg = options.get('producer_config')
+            if self._producer_config is _option_cfg:
+                # object identity
+                pass
+            else:
+                if self._producer_config is None:
+                    self._producer_config = _option_cfg
+                else:
+                    self._producer_config.update(_option_cfg)
+            del opts['producer_config']
+        if opts:
+            warnings.warn('ignored options: {}'.format(str(opts)), category=None, stacklevel=3)
 
 
     @property
@@ -462,10 +532,17 @@ class KafkaProducer(AbstractSink):
         msg_attr_name = None
         key_attr_name = None
         streamSchema = stream.oport.schema
-        if streamSchema is CommonSchema.Json:
+        if streamSchema is CommonSchema.Python:
+            msg_attr_name = '__spl_po'
+            raise TypeError('CommonSchema.Python is not supported')
+        elif streamSchema is CommonSchema.XML:
+            raise TypeError('CommonSchema.XML is not supported')
+        elif streamSchema is CommonSchema.Json:
             msg_attr_name = 'jsonString'
         elif streamSchema is CommonSchema.String:
             msg_attr_name = 'string'
+        elif streamSchema is CommonSchema.Binary:
+            msg_attr_name = 'binary'
         elif streamSchema is Schema.BinaryMessage:
             # msg_attr_name = 'message'
             pass
