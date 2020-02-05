@@ -46,8 +46,8 @@ Simple connection parameter example::
     
     consumerProperties = {}
     consumerProperties['bootstrap.servers'] = 'kafka-host1.domain:9092,kafka-host2.domain:9092'
-    consumerProperties['fetch.min.bytes'] = '1024'
-    consumerProperties['max.partition.fetch.bytes'] = '4194304'
+    consumerProperties['fetch.min.bytes'] = 1024
+    consumerProperties['max.partition.fetch.bytes'] = 4194304
     
     consumer = KafkaConsumer(config=consumerProperties,
                              topic='Your_Topic',
@@ -118,6 +118,7 @@ The schema of the stream defines how messages are handled.
 
 * ``CommonSchema.String`` - Each message is a UTF-8 encoded string. No key is used.
 * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object. No key is used.
+* ``CommonSchema.Binary`` - Each message is a blob. No key is used.
 * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
 * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
 * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
