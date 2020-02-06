@@ -7,17 +7,25 @@ Overview
 ++++++++
 
 This module allows a Streams application to subscribe Kafka topics
-as a stream and to publish messages on a Kafka topics from a stream
-of tuples. To achieve this, this module provides the :py:class:`KafkaConsumer` and :py:class:`KafkaProducer` classes.
+as a stream and to publish messages on Kafka topics from a stream
+of tuples. To achieve this, this module provides the :py:class:`KafkaConsumer`
+and :py:class:`KafkaProducer` classes. The :py:class:`KafkaConsumer` is the source
+of a stream, and the :py:class:`KafkaProducer` acts as a Sink of a data stream. 
 
 Connection to a Kafka broker
 ++++++++++++++++++++++++++++
 
-To bootstrap servers of the Kafka broker can be defined using a Streams application configuration or
-within the Python code by using a dictionary variable.
-The name of the application configuration must be set as the ``app_config_name`` of the :py:class:`KafkaConsumer`
-or :py:class:`KafkaProducer`. Alternative, or in addition to an application configuration, these classes have 
-attributes ``consumer_config`` or ``producer_config`` to set a dictionary with configs.
+Kafka consumers and producers are configured by using a consumer or producer configuration. Apart from 
+the connection information, like hostnames, TCP ports, and security settings, these configurations can contain
+also settings that affect the behaviour of the consumer or producer client. That's why these configurations
+can be specific for consumers and producers. In almost all cases it is sufficient to configure 
+only the connection specific information.
+
+Kafka configurations can be stored in *application configurations*, which are named collections of key-value pairs.
+The ``config`` parameter of the :py:class:`KafkaConsumer` and :py:class:`KafkaProducer` classes can take a ``str``
+type argument - in this case the name of an application configuration is assumed -, or a ``dict`` type argument.
+In this case it must be a valid consumer or producer configuration.
+
 The minimum set of properties in the application configuration or dictionary contains ``bootstrap.servers``, for example
 
 .. csv-table::
@@ -27,16 +35,32 @@ The minimum set of properties in the application configuration or dictionary con
 
 Other configs for Kafka consumers or Kafka producers can be added to the application configuration or dictionary.
 When configurations are specified, which are specific for consumers or producers only, it is recommended
-to use different application configurations or variables of dict type for :py:class:`KafkaConsumer` and :py:class:`KafkaProducer`.
+to use different application configurations or ``dict`` type variables for :py:class:`KafkaConsumer` and :py:class:`KafkaProducer`.
 
-When the connection information contains sensitive information, like login information, it is also possible to store 
-these information together with the server names in an application configuration and configure consumer or producer 
-specific configs as attributes to :py:class:`KafkaConsumer` or :py:class:`KafkaProducer`.
 The consumer and producer configs can be found in the `Kafka documentation <https://kafka.apache.org/23/documentation/>`_.
  
 Please note, that the underlying SPL toolkit already adjusts several configurations.
 Please review the `toolkit operator reference <https://ibmstreams.github.io/streamsx.kafka/doc/spldoc/html/>`_ 
 for defaults and adjusted configurations.
+
+Connection with the IBM Event Streams cloud service
++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The IBM Event Streams cloud service is a fully managed Kafka service. To connect with it, 
+*service credentials* must be used. The function :py:func:`create_connection_properties_for_eventstreams` 
+creates the Kafka configuration from the service credentials::
+
+    # assume, the service credentials are stored in the file /tmp/eventstreams.json
+    consumer = KafkaConsumer(
+        config=create_connection_properties_for_eventstreams('/tmp/eventstreams.json'),
+        topic='MY_TOPIC',
+        schema=CommonSchema.Json)
+    topology = Topology()
+    kafka_stream = topology.source(consumer)
+
+
+Connection examples
++++++++++++++++++++
 
 Simple connection parameter example::
 
@@ -44,7 +68,7 @@ Simple connection parameter example::
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
     
-    consumerProperties = {}
+    consumerProperties = dict()
     consumerProperties['bootstrap.servers'] = 'kafka-host1.domain:9092,kafka-host2.domain:9092'
     consumerProperties['fetch.min.bytes'] = 1024
     consumerProperties['max.partition.fetch.bytes'] = 4194304
@@ -53,18 +77,18 @@ Simple connection parameter example::
                              topic='Your_Topic',
                              schema=CommonSchema.String)
     topology = Topology()
-    fromKafka = topo.source(consumer)
+    fromKafka = topology.source(consumer)
 
 When trusted certificates, or client certificates, and private keys are required to connect with a Kafka cluster,
-the function :py:func:`create_connection_properties <create_connection_properties>` helps to create stores for
+the function :py:func:`create_connection_properties <create_connection_properties>` helps to create keystores for
 certificates and keys, and to create the right properties.
 
 In IBM Cloud Pak for Data it is also possible to create application configurations for consumer and 
 producer properties. An application configuration is a safe place to store sensitive data. Use the
 function :py:func:`configure_connection_from_properties <configure_connection_from_properties>` 
-to create an application configuration for kafka properties.
+to create an application configuration for Kafka properties.
 
-Example with use of an application configuration::
+Example with use of an application configuration for use on IBM Cloud Pak for Data::
 
     from icpd_core import icpd_util
     

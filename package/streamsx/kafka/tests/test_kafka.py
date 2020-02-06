@@ -510,18 +510,19 @@ class TestKafkaConsumer(TestCase):
         self.assertDictEqual(inst.consumer_config, {'bootstrap.servers':'localhost:9999', 'max.poll.records':2345, 'session.timeout.ms':240000})
     
     def test_instantiate_kwargs(self):
-        inst = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessage,
+        inst = KafkaConsumer({'bootstrap.servers':'localhost:9999'}, 'topic1', MsgSchema.BinaryMessage,
                              #kwargs except consumer_config
                              group_size=3,
                              group_id='gid333',
                              client_id='my_client_id',
                              vm_arg=['-Xms=345m', '-Xmx4G'],
                              ignored='must go into a warning',
+                             app_config_name='appconfig',
                              ssl_debug=True)
         self.assertEqual(inst._topic, 'topic1')
         self.assertEqual(inst.app_config_name, 'appconfig')
         self.assertIsNotNone(inst._schema)
-        self.assertIsNone(inst.consumer_config)
+        self.assertIsNotNone(inst.consumer_config)
         self.assertEqual(inst.group_size, 3)
         self.assertEqual(inst.group_id, 'gid333')
         self.assertEqual(inst.client_id, 'my_client_id')
@@ -635,15 +636,16 @@ class TestKafkaProducer(TestCase):
         self.assertDictEqual(inst.producer_config, {'bootstrap.servers':'localhost:9999', 'compression.type':'snappy', 'retries':42})
     
     def test_instantiate_kwargs(self):
-        inst = KafkaProducer('appconfig', 'topic1',
+        inst = KafkaProducer({'bootstrap.servers':'localhost:9999'}, 'topic1',
                              #kwargs except producer_config
                              ignored='must go into a warning',
                              client_id='my_client_id',
                              vm_arg=['-Xms=345m', '-Xmx4G'],
+                             app_config_name='appconfig',
                              ssl_debug=True)
         self.assertEqual(inst._topic, 'topic1')
         self.assertEqual(inst.app_config_name, 'appconfig')
-        self.assertIsNone(inst.producer_config)
+        self.assertIsNotNone(inst.producer_config)
         self.assertIsNone(inst._msg_attr_name)
         self.assertIsNone(inst._key_attr_name)
         self.assertEqual(inst.client_id, 'my_client_id')

@@ -64,7 +64,7 @@ class KafkaConsumer(AbstractSource):
     
     A KafkaConsumer subscribes to one or more topics and can build a consumer 
     group by setting :attr:`group_size` to a value greater than one. In this case,
-    the KafkaConsumer is the begin of a parallel region.
+    the KafkaConsumer is the begin of a *parallel region*.
     
     The KafkaConsumer can also be the begin of a periodic consistent region::
     
@@ -73,10 +73,10 @@ class KafkaConsumer(AbstractSource):
         from streamsx.kafka.schema import Schema
         
         consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
-                                 topic="myTopic",
-                                 schema=Schema.StringMessageMeta)
-        consumer.group_size = 3
-        consumer.group_id = "my-consumer-group"
+                                 topic='myTopic',
+                                 schema=Schema.StringMessageMeta,
+                                 group_size = 3,
+                                 group_id = "my-consumer-group")
     
         topology = Topology("KafkaConsumer")
         from_kafka = topology.source(consumer, "SourceName").set_consistent(ConsistentRegionConfig.periodic(period=60))
@@ -87,22 +87,24 @@ class KafkaConsumer(AbstractSource):
         config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
         topic(str|list): Single topic or list of topics to subscribe messages from
         schema(StreamSchema): Schema for the output stream
-        message_attribute_name(str): the attribute name in the schema that receives the message content of the Kafka message.
-            Required for user-defined schema when the attribute name is different from ``message``.
-        key_attribute_name(str): the attribute name in the schema that receives the key of the Kafka message.
-            Required for user-defined schema when the attribute name is different from ``key``.
         
             Valid schemas are:
             
-            * ``CommonSchema.String`` - Each message is a UTF-8 encoded string.
-            * ``CommonSchema.Json`` - Each message is a UTF-8 encoded serialized JSON object.
-            * ``CommonSchema.Binary`` - Each message is binary object (byte array).
-            * :py:const:`~schema.Schema.StringMessage` - structured schema with message and key
-            * :py:const:`~schema.Schema.BinaryMessage` - structured schema with message and key
-            * :py:const:`~schema.Schema.StringMessageMeta` - structured schema with message, key, and message meta data
-            * :py:const:`~schema.Schema.BinaryMessageMeta` - structured schema with message, key, and message meta data
+            * ``CommonSchema.String`` - pre-defined, each message is a UTF-8 encoded string.
+            * ``CommonSchema.Json`` - pre-defined, each message is a UTF-8 encoded serialized JSON object.
+            * ``CommonSchema.Binary`` - pre-defined, each message is binary object (byte array).
+            * :py:const:`~schema.Schema.StringMessage` - pre-defined, structured schema with message and key
+            * :py:const:`~schema.Schema.BinaryMessage` - pre-defined, structured schema with message and key
+            * :py:const:`~schema.Schema.StringMessageMeta` - pre-defined, structured schema with message, key, and message meta data
+            * :py:const:`~schema.Schema.BinaryMessageMeta` - pre-defined, structured schema with message, key, and message meta data
             * User defined schemas. When user defined schemas are used, the attributes names for message and key must be given
-            if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
+              if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
+              
+        message_attribute_name(str): The attribute name in the stream that receives the message content of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``message``.
+        key_attribute_name(str): The attribute name in the stream that receives the key of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``key``.
+        
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
         
             * ssl_debug
@@ -111,7 +113,8 @@ class KafkaConsumer(AbstractSource):
             * group_size
             * client_id
             * consumer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
-                This applies also for configs stored in an application configuration.
+              This applies also for configs stored in an application configuration.
+            * app_config_name
         
     .. versionadded:: 1.8.0
     """
@@ -183,6 +186,9 @@ class KafkaConsumer(AbstractSource):
         if 'group_size' in options:
             self.group_size = options.get('group_size')
             del opts['group_size']
+        if 'app_config_name' in options:
+            self.app_config_name = options.get('app_config_name')
+            del opts['app_config_name']
         if 'consumer_config' in options:
             _option_cfg = options.get('consumer_config')
             if self._consumer_config is _option_cfg:
@@ -211,7 +217,10 @@ class KafkaConsumer(AbstractSource):
     @property
     def vm_arg(self):
         """
-         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``
+         str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
+             For multiple arguments, use a list::
+             
+                 mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
 
@@ -227,6 +236,10 @@ class KafkaConsumer(AbstractSource):
         The application configuration must exist when the topology is submitted.
         """
         return self._app_config_name
+
+    @app_config_name.setter
+    def app_config_name(self, app_config_name):
+        self._app_config_name = app_config_name
 
     @property
     def consumer_config(self):
@@ -385,7 +398,8 @@ class KafkaProducer(AbstractSink):
             * vm_arg
             * client_id
             * producer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
-                This applies also for configs stored in an application configuration.
+              This applies also for configs stored in an application configuration.
+            * app_config_name
 
     .. versionadded:: 1.8.0
     """
@@ -427,6 +441,9 @@ class KafkaProducer(AbstractSink):
         if 'client_id' in options:
             self.client_id = options.get('client_id')
             del opts['client_id']
+        if 'app_config_name' in options:
+            self.app_config_name = options.get('app_config_name')
+            del opts['app_config_name']
         if 'producer_config' in options:
             _option_cfg = options.get('producer_config')
             if self._producer_config is _option_cfg:
@@ -458,6 +475,7 @@ class KafkaProducer(AbstractSink):
         """
          str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
              For multiple arguments, use a list::
+             
                  mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
@@ -474,6 +492,10 @@ class KafkaProducer(AbstractSink):
         The application configuration must exist when the topology is submitted.
         """
         return self._app_config_name
+
+    @app_config_name.setter
+    def app_config_name(self, app_config_name):
+        self._app_config_name = app_config_name
 
     @property
     def producer_config(self):
