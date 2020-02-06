@@ -1439,9 +1439,9 @@ class _KafkaConsumer(streamsx.spl.op.Source):
                triggerCount=None,
                userLib=None,
                name=None):
-        kind="com.ibm.streamsx.kafka::KafkaConsumer"
-        inputs=None
-        schemas=schema
+        kind = "com.ibm.streamsx.kafka::KafkaConsumer"
+        inputs = None
+        schemas = schema if isinstance(schema, list) else [schema]
         params = dict()
         if vmArg is not None:
             params['vmArg'] = vmArg

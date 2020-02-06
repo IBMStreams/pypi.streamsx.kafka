@@ -532,19 +532,31 @@ class TestKafkaConsumer(TestCase):
     def test_schema(self):
         #StrConsumerSchema = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str)])
         c = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        Topology().source(c)
+        c = KafkaConsumer('appconfig', 'topic1', self.schema, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessage)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessageMeta)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessage)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessageMeta)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', CommonSchema.String)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Json)
+        Topology().source(c)
+        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Binary)
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', StreamSchema('tuple<int32 key,rstring message>'), message_attribute_name='message', key_attribute_name='key')
         self.assertEqual(c._msg_attr_name, 'message')
         self.assertEqual(c._key_attr_name, 'key')
+        Topology().source(c)
         c = KafkaConsumer('appconfig', 'topic1', 'tuple<rstring message,rstring key>', message_attribute_name='message', key_attribute_name='key')
         self.assertEqual(c._msg_attr_name, 'message')
         self.assertEqual(c._key_attr_name, 'key')
-        c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Binary)
+        Topology().source(c)
         
     def test_schema_bad(self):
         # constructor tests
@@ -553,6 +565,17 @@ class TestKafkaConsumer(TestCase):
         
     def test_compile_user_schema(self):
         c = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        c.vm_arg = '-Xmx2G'
+        c.ssl_debug = True
+        c.group_size = 3
+        c.consumer_config = {'bootstrap.servers':'localhost:9092'}
+        topology = Topology('test_compile_user_schema')
+        msgs = topology.source(c, 'Messages')
+        msgs.end_parallel().print()
+        self._build_only(topology)
+
+    def test_compile_user_schema2(self):
+        c = KafkaConsumer('appconfig', 'topic1', self.schema, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
         c.vm_arg = '-Xmx2G'
         c.ssl_debug = True
         c.group_size = 3
