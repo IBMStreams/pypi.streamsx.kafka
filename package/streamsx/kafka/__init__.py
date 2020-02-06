@@ -26,7 +26,7 @@ The ``config`` parameter of the :py:class:`KafkaConsumer` and :py:class:`KafkaPr
 type argument - in this case the name of an application configuration is assumed -, or a ``dict`` type argument.
 In this case it must be a valid consumer or producer configuration.
 
-The minimum set of properties in the application configuration or dictionary contains ``bootstrap.servers``, for example
+The minimum set of properties in the application configuration or dictionary contains **bootstrap.servers**, for example
 
 .. csv-table::
     :header: config, value
@@ -34,7 +34,7 @@ The minimum set of properties in the application configuration or dictionary con
     bootstrap.servers, "host1:port1,host2:port2,host3:port3"
 
 Other configs for Kafka consumers or Kafka producers can be added to the application configuration or dictionary.
-When configurations are specified, which are specific for consumers or producers only, it is recommended
+When configurations are specified, which are specific for consumers or producers, it is recommended
 to use different application configurations or ``dict`` type variables for :py:class:`KafkaConsumer` and :py:class:`KafkaProducer`.
 
 The consumer and producer configs can be found in the `Kafka documentation <https://kafka.apache.org/23/documentation/>`_.
