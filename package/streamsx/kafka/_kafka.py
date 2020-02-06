@@ -107,14 +107,14 @@ class KafkaConsumer(AbstractSource):
         
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
         
-            * ssl_debug
-            * vm_arg
             * group_id
             * group_size
             * client_id
+            * app_config_name
             * consumer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
               This applies also for configs stored in an application configuration.
-            * app_config_name
+            * ssl_debug
+            * vm_arg
         
     .. versionadded:: 1.8.0
     """
@@ -263,7 +263,8 @@ class KafkaConsumer(AbstractSource):
         """
         str: The identifier of a Kafka consumer group. This attribute goes into the ``group.id``
         consumer config and overrides the same property if given as :attr:`consumer_config`.
-        When no group identifier is given, a group identifier is generated from the job name and the topic.
+        When no group identifier is given, a group identifier is generated from the job name and
+        the subscribed topics.
         """
         return self._group_id
 
@@ -282,7 +283,7 @@ class KafkaConsumer(AbstractSource):
         
         This is effectively the same as ``Stream.set_parallel(width=group_size)``.
         
-        The parallel region can be ended for example, with ``Stream.end_parallel()``.
+        The parallel region can be ended, for example, with ``Stream.end_parallel()``.
         """
         return self._group_size
 
@@ -369,7 +370,7 @@ class KafkaConsumer(AbstractSource):
 
 class KafkaProducer(AbstractSink):
     """
-    The ``KafkaProducer`` represents a stream termination that publishes messages to one or more Kafka topics.
+    The ``KafkaProducer`` represents a stream termination that publishes each tuple as a message to one or more Kafka topics.
     Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
 
     Trivial example::
@@ -394,12 +395,12 @@ class KafkaProducer(AbstractSink):
             Required for user-defined schema when the attribute name is different from ``key``.
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
         
-            * ssl_debug
-            * vm_arg
             * client_id
+            * app_config_name
             * producer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
               This applies also for configs stored in an application configuration.
-            * app_config_name
+            * ssl_debug
+            * vm_arg
 
     .. versionadded:: 1.8.0
     """
