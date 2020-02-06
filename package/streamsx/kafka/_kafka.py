@@ -136,9 +136,10 @@ class KafkaConsumer(AbstractSource):
         self._msg_attr_name = None
         if schema is CommonSchema.Python:
             self._msg_attr_name = '__spl_po'
-            raise TypeError('CommonSchema.Python is not supported')
+            raise TypeError('CommonSchema.Python is not supported by the KafkaConsumer')
         elif schema is CommonSchema.XML:
-            raise TypeError('CommonSchema.XML is not supported')
+            self._msg_attr_name = 'document'
+            raise TypeError('CommonSchema.XML is not supported by the KafkaConsumer')
         elif schema is CommonSchema.Json:
             self._msg_attr_name = 'jsonString'
         elif schema is CommonSchema.String:
@@ -202,6 +203,7 @@ class KafkaConsumer(AbstractSource):
             del opts['consumer_config']
         if opts:
             warnings.warn('ignored options: {}'.format(str(opts)), category=None, stacklevel=3)
+        self._op = None
 
     @property
     def ssl_debug(self):
@@ -350,7 +352,7 @@ class KafkaConsumer(AbstractSource):
             if self._ssl_debug:
                 vmargs.append('-Djavax.net.debug=all')
 
-        op = _KafkaConsumer(topology,
+        self._op = _KafkaConsumer(topology,
                             schema=self._schema,
                             vmArg=vmargs,
                             appConfigName=self._app_config_name,
@@ -361,7 +363,7 @@ class KafkaConsumer(AbstractSource):
                             groupId=self._group_id,
                             clientId=self._client_id,
                             name=name)
-        oStream = op.stream
+        oStream = self._op.stream
         if self._group_size > 1:
             return oStream.set_parallel(self._group_size)
         else:
@@ -458,7 +460,7 @@ class KafkaProducer(AbstractSink):
             del opts['producer_config']
         if opts:
             warnings.warn('ignored options: {}'.format(str(opts)), category=None, stacklevel=3)
-
+        self._op = None
 
     @property
     def ssl_debug(self):
@@ -557,9 +559,10 @@ class KafkaProducer(AbstractSink):
         streamSchema = stream.oport.schema
         if streamSchema is CommonSchema.Python:
             msg_attr_name = '__spl_po'
-            raise TypeError('CommonSchema.Python is not supported')
+            raise TypeError('CommonSchema.Python is not supported by the KafkaProducer')
         elif streamSchema is CommonSchema.XML:
-            raise TypeError('CommonSchema.XML is not supported')
+            msg_attr_name = 'document'
+            raise TypeError('CommonSchema.XML is not supported by the KafkaProducer')
         elif streamSchema is CommonSchema.Json:
             msg_attr_name = 'jsonString'
         elif streamSchema is CommonSchema.String:
@@ -602,7 +605,7 @@ class KafkaProducer(AbstractSink):
             if self._ssl_debug:
                 vmargs.append('-Djavax.net.debug=all')
 
-        op = _KafkaProducer(stream,
+        self._op = _KafkaProducer(stream,
                             propertiesFile=propsFilename,
                             vmArg=vmargs,
                             appConfigName=self._app_config_name,
@@ -612,16 +615,16 @@ class KafkaProducer(AbstractSink):
 
         # create the input attribute expressions after operator op initialization
         if msg_attr_name is not None:
-            op.params['messageAttribute'] = op.attribute(stream, msg_attr_name)
+            self._op.params['messageAttribute'] = self._op.attribute(stream, msg_attr_name)
         if key_attr_name is not None:
-            op.params['keyAttribute'] = op.attribute(stream, key_attr_name)
+            self._op.params['keyAttribute'] = self._op.attribute(stream, key_attr_name)
     #    if partitionAttributeName is not None:
-    #        op.params['partitionAttribute'] = op.attribute(stream, partitionAttributeName)
+    #        self._op.params['partitionAttribute'] = self._op.attribute(stream, partitionAttributeName)
     #    if timestampAttributeName is not None:
-    #        op.params['timestampAttribute'] = op.attribute(stream, timestampAttributeName)
-    #    if topicAttributeName is not None:
-    #        op.params['topicAttribute'] = op.attribute(stream, topicAttributeName)
-        return streamsx.topology.topology.Sink(op)
+    #        self._op.params['timestampAttribute'] = self._op.attribute(stream, timestampAttributeName)
+    #    if tself._opicAttributeName is not None:
+    #        self._op.params['topicAttribute'] = self._op.attribute(stream, topicAttributeName)
+        return streamsx.topology.topology.Sink(self._op)
 
 
 def _check_non_whitespace_string(s):

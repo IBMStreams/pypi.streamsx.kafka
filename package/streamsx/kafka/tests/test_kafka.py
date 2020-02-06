@@ -533,30 +533,62 @@ class TestKafkaConsumer(TestCase):
         #StrConsumerSchema = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str)])
         c = KafkaConsumer('appconfig', 'topic1', [self.schema], message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'kafka_msg')
+        self.assertEqual(c._op.params['outputKeyAttributeName'], 'kafka_key')
+        
         c = KafkaConsumer('appconfig', 'topic1', self.schema, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'kafka_msg')
+        self.assertEqual(c._op.params['outputKeyAttributeName'], 'kafka_key')
+
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessage)
         Topology().source(c)
+        self.assertNotIn('outputMessageAttributeName', c._op.params)
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.BinaryMessageMeta)
         Topology().source(c)
+        self.assertNotIn('outputMessageAttributeName', c._op.params)
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessage)
         Topology().source(c)
+        self.assertNotIn('outputMessageAttributeName', c._op.params)
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', MsgSchema.StringMessageMeta)
         Topology().source(c)
+        self.assertNotIn('outputMessageAttributeName', c._op.params)
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', CommonSchema.String)
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'string')
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Json)
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'jsonString')
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', CommonSchema.Binary)
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'binary')
+        self.assertNotIn('outputKeyAttributeName', c._op.params)
+
         c = KafkaConsumer('appconfig', 'topic1', StreamSchema('tuple<int32 key,rstring message>'), message_attribute_name='message', key_attribute_name='key')
         self.assertEqual(c._msg_attr_name, 'message')
         self.assertEqual(c._key_attr_name, 'key')
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'message')
+        self.assertEqual(c._op.params['outputKeyAttributeName'], 'key')
+
         c = KafkaConsumer('appconfig', 'topic1', 'tuple<rstring message,rstring key>', message_attribute_name='message', key_attribute_name='key')
         self.assertEqual(c._msg_attr_name, 'message')
         self.assertEqual(c._key_attr_name, 'key')
         Topology().source(c)
+        self.assertEqual(c._op.params['outputMessageAttributeName'], 'message')
+        self.assertEqual(c._op.params['outputKeyAttributeName'], 'key')
         
     def test_schema_bad(self):
         # constructor tests
@@ -680,26 +712,43 @@ class TestKafkaProducer(TestCase):
         pyObjStream = topo.source(['Hello', 'World!'])
         
         jsonStream = pyObjStream.as_json()
-        jsonStream.for_each(KafkaProducer('json', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        s = KafkaProducer('json', 'TOPIC', message_attribute_name=None, key_attribute_name=None)
+        jsonStream.for_each(s)
+        self.assertIsInstance(s._op.params['messageAttribute'], streamsx.spl.op.Expression)
 
         stringStream = pyObjStream.as_string()
-        stringStream.for_each(KafkaProducer('string', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        s = KafkaProducer('string', 'TOPIC', message_attribute_name=None, key_attribute_name=None)
+        stringStream.for_each(s)
+        self.assertIsInstance(s._op.params['messageAttribute'], streamsx.spl.op.Expression)
         
         binStream = pyObjStream.map (func=lambda s: bytes(s, utf-8), schema=CommonSchema.Binary)
-        binStream.for_each(KafkaProducer('binary', 'TOPIC'))
+        s = KafkaProducer('binary', 'TOPIC', message_attribute_name=None, key_attribute_name=None)
+        binStream.for_each(s)
+        self.assertIsInstance(s._op.params['messageAttribute'], streamsx.spl.op.Expression)
         
         binMsgStream = pyObjStream.map(func=lambda s: {'binary': bytes(s, 'utf-8'), 'key': s}, schema=MsgSchema.BinaryMessage)
-        binMsgStream.for_each(KafkaProducer('BinaryMessage', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        s = KafkaProducer('BinaryMessage', 'TOPIC', message_attribute_name='ignored', key_attribute_name='ignored')
+        binMsgStream.for_each(s)
+        self.assertNotIn('messageAttribute', s._op.params)
+        self.assertNotIn('keyAttribute', s._op.params)
         
         strMsgStream = pyObjStream.map(func=lambda s: {'message': s, 'key': s}, schema=MsgSchema.StringMessage)
-        strMsgStream.for_each(KafkaProducer('StringMessage', 'TOPIC', message_attribute_name=None, key_attribute_name=None))
+        s = KafkaProducer('StringMessage', 'TOPIC', message_attribute_name='ignored', key_attribute_name='ignored')
+        strMsgStream.for_each(s)
+        self.assertNotIn('messageAttribute', s._op.params)
+        self.assertNotIn('keyAttribute', s._op.params)
         
         userMsgStream = pyObjStream.map(func=lambda s: {'kafka_msg': s, 'kafka_key':s}, schema=self.schema)
-        userMsgStream.for_each(KafkaProducer('namedTuple', 'TOPIC', message_attribute_name='kafka_msg', key_attribute_name='kafka_key'))
+        s = KafkaProducer('namedTuple', 'TOPIC', message_attribute_name='kafka_msg', key_attribute_name='kafka_key')
+        userMsgStream.for_each(s)
+        self.assertIsInstance(s._op.params['messageAttribute'], streamsx.spl.op.Expression)
+        self.assertIsInstance(s._op.params['keyAttribute'], streamsx.spl.op.Expression)
         
         splMsgStream = pyObjStream.map(func=lambda s: {'m':s, 'k':s}, schema='tuple<rstring m, int64 k>')
-        splMsgStream.for_each(KafkaProducer('spl', 'TOPIC', message_attribute_name='m', key_attribute_name='k'))
-#        self._build_only(topo)
+        s = KafkaProducer('spl', 'TOPIC', message_attribute_name='m', key_attribute_name='k')
+        splMsgStream.for_each(s)
+        self.assertIsInstance(s._op.params['messageAttribute'], streamsx.spl.op.Expression)
+        self.assertIsInstance(s._op.params['keyAttribute'], streamsx.spl.op.Expression)
 
     def test_schema_bad(self):
         topo = Topology()
