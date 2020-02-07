@@ -222,7 +222,7 @@ class KafkaConsumer(AbstractSource):
          str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
              For multiple arguments, use a list::
              
-                 mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
+                 consumer.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
 
@@ -381,7 +381,7 @@ class KafkaProducer(AbstractSink):
                                  topic="topic")
         stream_to_publish.for_each(producer)
 
-    Example with two topics in Event Streams cloud service::
+    Example with two topics in IBM Event Streams cloud service::
     
         eventstreams_credentials_json = "..."
         producer = KafkaProducer(create_connection_properties_for_eventstreams(eventstreams_credentials_json),
@@ -479,7 +479,7 @@ class KafkaProducer(AbstractSink):
          str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
              For multiple arguments, use a list::
              
-                 mqtt.vm_arg = ["-Xmx=2G", "-Xms=512M"]
+                 producer.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
 

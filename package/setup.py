@@ -6,7 +6,7 @@ setup(
     packages = ['streamsx.kafka', 'streamsx.kafka.scripts'],
     include_package_data=True,
     version = streamsx.kafka.__version__,
-    description = 'IBM Streams Kafka integration',
+    description = 'Kafka integration for IBM Streams topology applications',
     long_description = open('DESC.txt').read(),
     author = 'IBM Streams @ github.com',
     author_email = 'rolef.heinrich@de.ibm.com',
