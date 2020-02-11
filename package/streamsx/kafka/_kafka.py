@@ -10,7 +10,7 @@ import streamsx.spl.toolkit as tk
 
 from streamsx.kafka.schema import Schema
 
-from tempfile import gettempdir
+from tempfile import gettempdir, NamedTemporaryFile
 import json
 from builtins import str
 from enum import Enum
@@ -334,11 +334,8 @@ class KafkaConsumer(AbstractSource):
 
         propsFilename = None
         if self._consumer_config:
-            if name is None:
-                fName = 'consumer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
-            else:
-                fName = 'consumer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
-            propsFilename = _add_properties_file(topology, self._consumer_config, fName)
+            tmpf = NamedTemporaryFile(suffix='.properties', prefix='consumer-', delete=False)
+            propsFilename = _add_properties_file(topology, self._consumer_config, tmpf.name)
 
         if name is None:
             name = "KafkaConsumed_" + _topic_tok
@@ -587,11 +584,8 @@ class KafkaProducer(AbstractSink):
 
         propsFilename = None
         if self._producer_config:
-            if name is None:
-                fName = 'producer-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
-            else:
-                fName = 'producer-' + str(name) + '-' + str(_topic_tok) + '-' + _generate_random_digits(8) + '.properties'
-            propsFilename = _add_properties_file(topology, self._producer_config, fName)
+            tmpf = NamedTemporaryFile(suffix='.properties', prefix='producer-', delete=False)
+            propsFilename = _add_properties_file(topology, self._producer_config, tmpf.name)
 
         if name is None:
             name = "KafkaProduced_" + _topic_tok
@@ -828,6 +822,7 @@ def _create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostna
                                                        topology))
     return props
 
+
 def _write_properties_file(properties, file_name=None):
     """
     writes properties as a dictionary into a file
@@ -840,6 +835,7 @@ def _write_properties_file(properties, file_name=None):
         for key, value in properties.items():
             properties_file.write(key + '=' + str(value) + '\n')
 
+
 def _add_properties_file(topology, properties, file_name):
     """
     Adds properties as a dictionary as a file dependency to the topology
@@ -850,7 +846,7 @@ def _add_properties_file(topology, properties, file_name):
         file_name(str):         the filename of the file dependency
 
     Returns:
-        str: 'etc/' + file_name
+        str: 'etc/' + basename(file_name)
     """
     if properties is None:
         raise TypeError(properties)
@@ -859,11 +855,10 @@ def _add_properties_file(topology, properties, file_name):
 
     if len(properties.keys()) == 0:
         raise ValueError ("properties(dict) is empty. Please add at least the property 'bootstrap.servers'.")
-    tmpfile = os.path.join(gettempdir(), file_name)
-    _write_properties_file (properties, tmpfile)
-    print('properties file ' + tmpfile + ' generated.')
-    topology.add_file_dependency(tmpfile, 'etc')
-    fName = 'etc/' + file_name
+    _write_properties_file (properties, file_name)
+    print('properties file ' + file_name + ' generated.')
+    topology.add_file_dependency(file_name, 'etc')
+    fName = 'etc/' + os.path.basename(file_name)
     print("Properties file " + fName + " added to the topology " + topology.name)
     return fName
 
@@ -1324,12 +1319,10 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
 
     if name is None:
         name = topic
-        fName = 'consumer-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
-    else:
-        fName = 'consumer-' + str(name) + '-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
 
     if isinstance(kafka_properties, dict):
-        propsFilename = _add_properties_file(topology, kafka_properties, fName)
+        tmpf = NamedTemporaryFile(suffix='.properties', prefix='consumer-', delete=False)
+        propsFilename = _add_properties_file(topology, kafka_properties, tmpf.name)
         _op = _KafkaConsumer(topology, schema=schema,
                              outputMessageAttributeName=msg_attr_name,
                              propertiesFile=propsFilename, 
@@ -1388,11 +1381,8 @@ def publish(stream, topic, kafka_properties, name=None):
         raise TypeError(streamSchema)
 
     if isinstance(kafka_properties, dict):
-        if name is None:
-            fName = 'producer-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
-        else:
-            fName = 'producer-' + str(name) + '-' + str(topic) + '-' + _generate_random_digits(8) + '.properties'
-        propsFilename = _add_properties_file(stream.topology, kafka_properties, fName)
+        tmpf = NamedTemporaryFile(suffix='.properties', prefix='producer-', delete=False)
+        propsFilename = _add_properties_file(stream.topology, kafka_properties, tmpf.name)
         _op = _KafkaProducer(stream,
                              propertiesFile=propsFilename,
                              topic=topic,
