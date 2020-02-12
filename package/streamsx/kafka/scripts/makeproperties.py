@@ -6,7 +6,6 @@ import sys
 import os
 import traceback
 import argparse
-import OpenSSL
 import streamsx.kafka as kafka
 import streamsx.kafka._kafka as kafka_int
 from tempfile import gettempdir
@@ -158,14 +157,11 @@ def makeproperties(args=None):
                                                         username=cmd_args.username,
                                                         password=cmd_args.password,
                                                         store_dir=cmd_args.out_keystore_dir,
-                                                        store_pass=None,   # Python will generate a password
-                                                        store_suffix=None) # Python creates a random suffix
-    except OpenSSL.crypto.Error as e:
-        print(traceback.format_exc(), file=sys.stderr)
-        rc = 4
-    except Exception as e:
+                                                        store_pass=None,   # generate a password
+                                                        store_suffix=None) # creates a random suffix
+    except:
         print('Error: failed to create properties: {0}'.format(traceback.format_exc()), file=sys.stderr)
-        rc = 5
+        rc = 4
     else:
         if cmd_args.out_propfile is None:
             print('\nKafka properties:\n')

@@ -6,7 +6,7 @@ setup(
     packages = ['streamsx.kafka', 'streamsx.kafka.scripts'],
     include_package_data=True,
     version = streamsx.kafka.__version__,
-    description = 'IBM Streams Kafka integration',
+    description = 'Kafka integration for IBM Streams topology applications',
     long_description = open('DESC.txt').read(),
     author = 'IBM Streams @ github.com',
     author_email = 'rolef.heinrich@de.ibm.com',
@@ -21,7 +21,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
-    install_requires=['streamsx>=1.12.10', 'pyOpenSSL==19.0', 'pyJKS==19.0', 'streamsx.toolkits'],
+    install_requires=['streamsx>=1.14.3a0,<2.0', 'streamsx.toolkits>=1.2.0'],
     entry_points = {
         'console_scripts': [
             'streamsx-kafka-make-properties=streamsx.kafka.scripts.makeproperties:main'
