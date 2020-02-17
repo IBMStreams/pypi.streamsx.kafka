@@ -452,7 +452,9 @@ class TestKafkaConsumer(TestCase):
         self.jobConfigPath = None
         self.bundlePath = None
         self.schema = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str)])
+        self.schema2 = typing.NamedTuple('StrConsumerSchema', [('kafka_msg', str), ('kafka_key', str), ('tpc', str), ('partn', int), ('ts', int), ('offs', int)])
         self.keep_results = False
+        #self.keep_results = True
 
     def tearDown(self):
         if not self.keep_results:
@@ -608,6 +610,22 @@ class TestKafkaConsumer(TestCase):
 
     def test_compile_user_schema2(self):
         c = KafkaConsumer('appconfig', 'topic1', self.schema, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
+        c.vm_arg = '-Xmx2G'
+        c.ssl_debug = True
+        c.group_size = 3
+        c.consumer_config = {'bootstrap.servers':'localhost:9092'}
+        topology = Topology('test_compile_user_schema')
+        msgs = topology.source(c, 'Messages')
+        msgs.end_parallel().print()
+        self._build_only(topology)
+
+    def test_compile_user_schema_all_meta_attrs(self):
+        c = KafkaConsumer('appconfig', 'topic1', self.schema2,
+                          message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key',
+                          topic_attribute_name='tpc',
+                          partition_attribute_name='partn',
+                          timestamp_attribute_name='ts',
+                          offset_attribute_name='offs')
         c.vm_arg = '-Xmx2G'
         c.ssl_debug = True
         c.group_size = 3
