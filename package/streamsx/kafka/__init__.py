@@ -150,6 +150,9 @@ The schema of the stream defines how messages are handled.
 
 When other schemas are used, the attribute names for the message and the message
 key must be specified when they have not the default names ``message`` or ``key``, respectively.
+When message metadata (topic, partition, message timestamp, and offset) is to be received, the names
+of the attributes must be specified when they have not the default names ``topic``, ``partition``, ``messageTimestamp``, 
+or ``offset``. Receiving message metadata is optional.
 
 Sample
 ++++++
@@ -190,7 +193,7 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.8.1'
+__version__='1.9.0'
 
 # controls sphinx documentation:
 __all__ = [

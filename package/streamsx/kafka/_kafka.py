@@ -104,7 +104,17 @@ class KafkaConsumer(AbstractSource):
             Required for user-defined schema when the attribute name is different from ``message``.
         key_attribute_name(str): The attribute name in the stream that receives the key of the Kafka message.
             Required for user-defined schema when the attribute name is different from ``key``.
-        
+        topic_attribute_name(str): The attribute name in the stream that receives the topic of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``topic``. The attribute in the schema is optional.
+        partition_attribute_name(str): The attribute name in the stream that receives the partition number of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``partition``.
+            The attribute in the schema must have the type ``int`` and is optional in the schema.
+        timestamp_attribute_name(str): The attribute name in the stream that receives the timestamp of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``messageTimestamp``.
+            The attribute in the schema must have the type ``int`` and is optional in the schema. The message timestamp is measured in milliseconds since Unix Epoch. 
+        offset_attribute_name(str): The attribute name in the stream that receives the offset of the Kafka message.
+            Required for user-defined schema when the attribute name is different from ``offset``.
+            The attribute in the schema must have the type ``int`` and is optional in the schema.
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
         
             * group_id
@@ -119,7 +129,14 @@ class KafkaConsumer(AbstractSource):
     .. versionadded:: 1.8.0
     """
     
-    def __init__(self, config, topic, schema, message_attribute_name=None, key_attribute_name=None, **options):
+    def __init__(self, config, topic, schema,
+                 message_attribute_name=None,
+                 key_attribute_name=None, 
+                 topic_attribute_name=None,
+                 partition_attribute_name=None,
+                 timestamp_attribute_name=None,
+                 offset_attribute_name=None,
+                 **options):
         if isinstance(config, str):
             self._app_config_name = config
             self.consumer_config = None
@@ -134,6 +151,10 @@ class KafkaConsumer(AbstractSource):
         
         self._key_attr_name = None
         self._msg_attr_name = None
+        self._topic_attribute_name = None
+        self._partition_attribute_name = None
+        self._timestamp_attribute_name = None
+        self._offset_attribute_name = None
         if schema is CommonSchema.Python:
             self._msg_attr_name = '__spl_po'
             raise TypeError('CommonSchema.Python is not supported by the KafkaConsumer')
@@ -162,7 +183,15 @@ class KafkaConsumer(AbstractSource):
             if message_attribute_name:
                 self._msg_attr_name = _check_non_whitespace_string(message_attribute_name)
             if key_attribute_name:
-                self._key_attr_name =  _check_non_whitespace_string(key_attribute_name)
+                self._key_attr_name = _check_non_whitespace_string(key_attribute_name)
+            if topic_attribute_name:
+                self._topic_attribute_name = _check_non_whitespace_string(topic_attribute_name)
+            if partition_attribute_name:
+                self._partition_attribute_name = _check_non_whitespace_string(partition_attribute_name)
+            if timestamp_attribute_name:
+                self._timestamp_attribute_name = _check_non_whitespace_string(timestamp_attribute_name)
+            if offset_attribute_name:
+                self._offset_attribute_name = _check_non_whitespace_string(offset_attribute_name)
         
         self._schema = schema
         self._vm_arg = None
@@ -355,6 +384,10 @@ class KafkaConsumer(AbstractSource):
                             appConfigName=self._app_config_name,
                             outputMessageAttributeName=self._msg_attr_name,
                             outputKeyAttributeName=self._key_attr_name,
+                            outputTimestampAttributeName=self._timestamp_attribute_name,
+                            outputOffsetAttributeName=self._offset_attribute_name,
+                            outputPartitionAttributeName=self._partition_attribute_name,
+                            outputTopicAttributeName=self._topic_attribute_name,
                             propertiesFile=propsFilename,
                             topic=self._topic, 
                             groupId=self._group_id,
