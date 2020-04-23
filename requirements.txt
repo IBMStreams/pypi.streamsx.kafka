@@ -1,2 +1,0 @@
-streamsx>=1.14.3a0,<2.0
-streamsx.toolkits>=1.2.0
