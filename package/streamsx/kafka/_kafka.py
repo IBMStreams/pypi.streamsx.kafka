@@ -57,7 +57,35 @@ class AuthMethod(Enum):
     """
 
 
-class KafkaConsumer(AbstractSource):
+class _KafkaComposite(object):
+
+    def __init__(self):
+        pass
+    
+    @staticmethod
+    def submission_parameter(name, default=None):
+        """Create an expression for a submission time parameter.
+        A submission parameter is a handle for a value that
+        is not defined until topology submission time. Submission parameters enable the creation
+        of reusable topology bundles.
+
+        Args:
+          name(str): The name of the submission time parameter.
+          default(str): The default value to be used when the parameter is not set at submission time.
+
+        Returns:
+          streamsx.spl.op.Expression: an expression to use a submission time parameter
+        """
+        if not name:
+            raise ValueError(name)
+        if default:
+            exprStr = 'getSubmissionTimeValue("{0}", "{1}")'.format(name, default)
+        else:
+            exprStr = 'getSubmissionTimeValue("{0}")'.format(name)
+        return streamsx.spl.op.Expression.expression(exprStr)
+
+
+class KafkaConsumer(_KafkaComposite, AbstractSource):
     """
     Represents a source for messages read from Kafka, which can be passed to 
     ``Topology.source()`` to create a stream.
@@ -83,9 +111,22 @@ class KafkaConsumer(AbstractSource):
 
     Operator driven consistent region is not supported by the KafkaConsumer.
 
+    The topic and the group_id can also be submission time parameters. A submission parameter is a handle for a value that
+    is not defined until topology submission time. Submission parameters enable the creation of reusable topology bundles::
+
+        from streamsx.topology.topology import Topology
+        from streamsx.kafka.schema import Schema
+        
+        consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic=KafkaConsumer.submission_parameter("topic"),
+                                 schema=Schema.StringMessageMeta)
+                                 
+        topology = Topology("KafkaConsumer")
+        from_kafka = topology.source(consumer, "SourceName")
+    
     Args:
         config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
-        topic(str|list): Single topic or list of topics to subscribe messages from
+        topic(str|list|streamsx.spl.op.Expression): Single topic or list of topics to subscribe messages from
         schema(StreamSchema): Schema for the output stream
         
             Valid schemas are:
@@ -199,7 +240,8 @@ class KafkaConsumer(AbstractSource):
         self._group_size = 1
         self._client_id = None
         self._ssl_debug = False
-        super(KafkaConsumer, self).__init__()
+        _KafkaComposite.__init__(self)
+        AbstractSource.__init__(self)
         opts = dict(options)
         if 'vm_arg' in options:
             self.vm_arg = options.get('vm_arg')
@@ -353,8 +395,10 @@ class KafkaConsumer(AbstractSource):
                 _topic_tok = "_".join(self._topic).replace("-", "_")
             else:
                 raise ValueError('topic must not be an empty list')
+        elif isinstance(self._topic, streamsx.spl.op.Expression):
+            _topic_tok = str(hash(str(self._topic)))
         else:
-            raise TypeError('trusted_cert must be of str or list type')
+            raise TypeError('topic must be of str, list, or streamsx.spl.op.Expression type')
 
         if self._app_config_name is None and not self._consumer_config:
             raise TypeError('one of app_config_name or non-empty consumer_config must be set')
@@ -400,7 +444,7 @@ class KafkaConsumer(AbstractSource):
             return oStream
 
 
-class KafkaProducer(AbstractSink):
+class KafkaProducer(_KafkaComposite, AbstractSink):
     """
     The ``KafkaProducer`` represents a stream termination that publishes each tuple as a message to one or more Kafka topics.
     Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
@@ -417,10 +461,17 @@ class KafkaProducer(AbstractSink):
         producer = KafkaProducer(create_connection_properties_for_eventstreams(eventstreams_credentials_json),
                                  topic=["topic1", "topic2"])
         stream_to_publish.for_each(producer)
-    
+
+    The topic can also be a submission time parameter. A submission parameter is a handle for a value that
+    is not defined until topology submission time. Submission parameters enable the creation of reusable topology bundles::
+
+        producer = KafkaProducer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
+                                 topic=KafkaProducer.submission_parameter("topic"))
+        stream_to_publish.for_each(producer)
+
     Args:
         config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
-        topic(str|list): Topic or topics to publish messages
+        topic(str|list|streamsx.spl.op.Expression): Topic or topics to publish messages
         message_attribute_name(str): the attribute name in the schema that is used as the message to publish.
             Required for user-defined schema when the attribute name is different from ``message``.
         key_attribute_name(str): the attribute name in the schema that is used as the key for the Kafka message to publish.
@@ -441,7 +492,7 @@ class KafkaProducer(AbstractSink):
         """
         Args:
             config(str|dict): The name of an application configuration (str) with producer configs or a dict with producer configs
-            topic(str|list): Topic or topics to publish messages
+            topic(str|list|streamsx.spl.op.Expression): Topic or topics to publish messages
         """
         if isinstance(config, str):
             self._app_config_name = config
@@ -463,7 +514,8 @@ class KafkaProducer(AbstractSink):
         self._vm_arg = None
         self._client_id = None
         self._ssl_debug = False
-        super(KafkaProducer, self).__init__()
+        _KafkaComposite.__init__(self)
+        AbstractSink.__init__(self)
         opts = dict(options)
         if 'vm_arg' in options:
             self.vm_arg = options.get('vm_arg')
@@ -578,8 +630,10 @@ class KafkaProducer(AbstractSink):
                 _topic_tok = "_".join(self._topic).replace("-", "_")
             else:
                 raise ValueError('topic must not be an empty list')
+        elif isinstance(self._topic, streamsx.spl.op.Expression):
+            _topic_tok = str(hash(str(self._topic)))
         else:
-            raise TypeError('topic must be of str or list type')
+            raise TypeError('topic must be of str, list, or streamsx.spl.op.Expression type')
 
         if self._app_config_name is None and not self._producer_config:
             raise TypeError('one of app_config_name or non-empty producer_config must be set')

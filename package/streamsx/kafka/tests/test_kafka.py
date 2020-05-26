@@ -445,6 +445,21 @@ class TestCreateConnectionProperties(TestCase):
                                              'ssl.keystore.type': 'JKS'
                                              }))
 
+
+class TestSubmissionParams(TestCase):
+    def test_create_expression(self):
+        expr = KafkaConsumer.submission_parameter("NAME")
+        self.assertEqual(str(expr), 'getSubmissionTimeValue("NAME")')
+        default = "abc" + str(56)
+        expr = KafkaConsumer.submission_parameter("NAME", "default")
+        self.assertEqual(str(expr), 'getSubmissionTimeValue("NAME", "default")')
+        expr = KafkaProducer.submission_parameter("NAME")
+        self.assertEqual(str(expr), 'getSubmissionTimeValue("NAME")')
+        default = "abc" + str(56)
+        expr = KafkaProducer.submission_parameter("NAME", "default")
+        self.assertEqual(str(expr), 'getSubmissionTimeValue("NAME", "default")')
+
+
 class TestKafkaConsumer(TestCase):
     def setUp(self):
         TestCase.setUp(self)
@@ -478,7 +493,18 @@ class TestKafkaConsumer(TestCase):
         assert(result.return_code == 0)
         self.jobConfigPath = result.jobConfigPath
         self.bundlePath = result.bundlePath
-    
+
+    def test_compile_submission_params(self):
+        topo = Topology()
+        binStream = topo.source(KafkaConsumer(config='appcfg',
+                                              topic=KafkaConsumer.submission_parameter("TOPIC", "default_topic"),
+                                              schema=MsgSchema.StringMessage,
+                                              group_id=KafkaConsumer.submission_parameter("KAFKA_GROUP")))
+        # tuple<blob message, rstring key>
+        binStream.for_each(KafkaProducer(config='appcfg',
+                                         topic=KafkaConsumer.submission_parameter("TOPIC", "default_topic")))
+        self._build_only(topo)
+
     def test_instantiate_conf_dict(self):
         inst = KafkaConsumer({'bootstrap.servers':'localhost:9999'}, 'topic1', MsgSchema.BinaryMessage, message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
         self.assertEqual(inst._topic, 'topic1')
@@ -679,7 +705,7 @@ class TestKafkaProducer(TestCase):
         assert(result.return_code == 0)
         self.jobConfigPath = result.jobConfigPath
         self.bundlePath = result.bundlePath
-    
+
     def test_instantiate_conf_dict(self):
         inst = KafkaProducer({'bootstrap.servers':'localhost:9999'}, 'topic1', message_attribute_name='kafka_msg ', key_attribute_name=' kafka_key')
         self.assertEqual(inst._topic, 'topic1')
