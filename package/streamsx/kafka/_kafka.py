@@ -75,6 +75,8 @@ class _KafkaComposite(object):
 
         Returns:
           streamsx.spl.op.Expression: an expression to use a submission time parameter
+          
+        .. versionadded:: 1.10.0
         """
         if not name:
             raise ValueError(name)
@@ -111,7 +113,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
 
     Operator driven consistent region is not supported by the KafkaConsumer.
 
-    The topic and the group_id can also be submission time parameters. A submission parameter is a handle for a value that
+    A single topic and the group_id can also be submission time parameters. A submission parameter is a handle for a value that
     is not defined until topology submission time. Submission parameters enable the creation of reusable topology bundles::
 
         from streamsx.topology.topology import Topology
@@ -462,7 +464,7 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
                                  topic=["topic1", "topic2"])
         stream_to_publish.for_each(producer)
 
-    The topic can also be a submission time parameter. A submission parameter is a handle for a value that
+    A single topic can also be a submission time parameter. A submission parameter is a handle for a value that
     is not defined until topology submission time. Submission parameters enable the creation of reusable topology bundles::
 
         producer = KafkaProducer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
