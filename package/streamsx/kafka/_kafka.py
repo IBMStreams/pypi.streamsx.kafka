@@ -1000,16 +1000,15 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
 
     Example for creating a configuration for a Streams instance with connection details::
 
-
-        from streamsx.rest import Instance
-        import streamsx.topology.context
         from icpd_core import icpd_util
+        from streamsx.rest_primitives import Instance
+        import streamsx.kafka as kafka
         
         cfg = icpd_util.get_service_instance_details(name='your-streams-instance')
         cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
         instance = Instance.of_service(cfg)
         bootstrap_servers = 'kafka-server-1.domain:9093,kafka-server-2.domain:9093,kafka-server-3.domain:9093'
-        app_cfg_name = configure_connection(instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
+        app_cfg_name = kafka.configure_connection(instance, 'my_app_cfg1', bootstrap_servers, 'TLSv1.2')
 
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
