@@ -193,7 +193,7 @@ a topic and the same application consuming the same topic::
 
 """
 
-__version__='1.10.0'
+__version__='1.10.1'
 
 # controls sphinx documentation:
 __all__ = [
