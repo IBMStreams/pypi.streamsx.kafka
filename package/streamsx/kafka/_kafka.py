@@ -33,14 +33,14 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
-    
+
     TLS = 1
     """Mutual TLS authentication with X.509 certificates.
     Client certificate and client private key is required
 
     .. versionadded:: 1.3
     """
-    
+
     PLAIN = 2
     """PLAIN, or SASL/PLAIN, is a simple username/password authentication mechanism that is
     typically used with TLS for encryption to implement secure authentication.
@@ -49,7 +49,7 @@ class AuthMethod(Enum):
 
     .. versionadded:: 1.3
     """
-    
+
     SCRAM_SHA_512 = 3
     """Authentication with SASL/SCRAM-SHA-512 method. A username and a password is required.
 
@@ -61,7 +61,7 @@ class _KafkaComposite(object):
 
     def __init__(self):
         pass
-    
+
     @staticmethod
     def submission_parameter(name, default=None):
         """Create an expression for a submission time parameter.
@@ -75,7 +75,7 @@ class _KafkaComposite(object):
 
         Returns:
           streamsx.spl.op.Expression: an expression to use a submission time parameter
-          
+
         .. versionadded:: 1.10.0
         """
         if not name:
@@ -89,25 +89,25 @@ class _KafkaComposite(object):
 
 class KafkaConsumer(_KafkaComposite, AbstractSource):
     """
-    Represents a source for messages read from Kafka, which can be passed to 
+    Represents a source for messages read from Kafka, which can be passed to
     ``Topology.source()`` to create a stream.
-    
-    A KafkaConsumer subscribes to one or more topics and can build a consumer 
+
+    A KafkaConsumer subscribes to one or more topics and can build a consumer
     group by setting :attr:`group_size` to a value greater than one. In this case,
     the KafkaConsumer is the begin of a *parallel region*.
-    
+
     The KafkaConsumer can also be the begin of a periodic consistent region::
-    
+
         from streamsx.topology.state import ConsistentRegionConfig
         from streamsx.topology.topology import Topology
         from streamsx.kafka.schema import Schema
-        
+
         consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
                                  topic='myTopic',
                                  schema=Schema.StringMessageMeta,
                                  group_size = 3,
                                  group_id = "my-consumer-group")
-    
+
         topology = Topology("KafkaConsumer")
         from_kafka = topology.source(consumer, "SourceName").set_consistent(ConsistentRegionConfig.periodic(period=60))
 
@@ -118,21 +118,21 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
 
         from streamsx.topology.topology import Topology
         from streamsx.kafka.schema import Schema
-        
+
         consumer = KafkaConsumer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
                                  topic=KafkaConsumer.submission_parameter("topic"),
                                  schema=Schema.StringMessageMeta)
-                                 
+
         topology = Topology("KafkaConsumer")
         from_kafka = topology.source(consumer, "SourceName")
-    
+
     Args:
         config(str|dict): The name of an application configuration (str) with consumer configs or a dict with consumer configs
         topic(str|list|streamsx.spl.op.Expression): Single topic or list of topics to subscribe messages from
         schema(StreamSchema): Schema for the output stream
-        
+
             Valid schemas are:
-            
+
             * ``CommonSchema.String`` - pre-defined, each message is a UTF-8 encoded string.
             * ``CommonSchema.Json`` - pre-defined, each message is a UTF-8 encoded serialized JSON object.
             * ``CommonSchema.Binary`` - pre-defined, each message is binary object (byte array).
@@ -142,7 +142,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
             * :py:const:`~schema.Schema.BinaryMessageMeta` - pre-defined, structured schema with message, key, and message meta data
             * User defined schemas. When user defined schemas are used, the attributes names for message and key must be given
               if they differ from the defaults ``message`` and ``key``. Receiving the key is optional.
-              
+
         message_attribute_name(str): The attribute name in the stream that receives the message content of the Kafka message.
             Required for user-defined schema when the attribute name is different from ``message``.
         key_attribute_name(str): The attribute name in the stream that receives the key of the Kafka message.
@@ -154,12 +154,12 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
             The attribute in the schema must have the type ``int`` and is optional in the schema.
         timestamp_attribute_name(str): The attribute name in the stream that receives the timestamp of the Kafka message.
             Required for user-defined schema when the attribute name is different from ``messageTimestamp``.
-            The attribute in the schema must have the type ``int`` and is optional in the schema. The message timestamp is measured in milliseconds since Unix Epoch. 
+            The attribute in the schema must have the type ``int`` and is optional in the schema. The message timestamp is measured in milliseconds since Unix Epoch.
         offset_attribute_name(str): The attribute name in the stream that receives the offset of the Kafka message.
             Required for user-defined schema when the attribute name is different from ``offset``.
             The attribute in the schema must have the type ``int`` and is optional in the schema.
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
-        
+
             * group_id
             * group_size
             * client_id
@@ -168,13 +168,13 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
               This applies also for configs stored in an application configuration.
             * ssl_debug
             * vm_arg
-        
+
     .. versionadded:: 1.8.0
     """
-    
+
     def __init__(self, config, topic, schema,
                  message_attribute_name=None,
-                 key_attribute_name=None, 
+                 key_attribute_name=None,
                  topic_attribute_name=None,
                  partition_attribute_name=None,
                  timestamp_attribute_name=None,
@@ -191,7 +191,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
         if topic is None:
             raise TypeError(topic)
         self._topic = topic
-        
+
         self._key_attr_name = None
         self._msg_attr_name = None
         self._topic_attribute_name = None
@@ -235,7 +235,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
                 self._timestamp_attribute_name = _check_non_whitespace_string(timestamp_attribute_name)
             if offset_attribute_name:
                 self._offset_attribute_name = _check_non_whitespace_string(offset_attribute_name)
-        
+
         self._schema = schema
         self._vm_arg = None
         self._group_id = None
@@ -284,7 +284,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
         bool: When ``True`` the property enables verbose SSL debug output at runtime.
         """
         return self._ssl_debug
-    
+
     @ssl_debug.setter
     def ssl_debug(self, ssl_debug:bool):
         self._ssl_debug = ssl_debug
@@ -294,7 +294,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
         """
          str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
              For multiple arguments, use a list::
-             
+
                  consumer.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
@@ -320,8 +320,8 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
     def consumer_config(self):
         """
         dict: The consumer configuration
-        
-        The consumer configuration must be a ``dict`` in which the keys are the 
+
+        The consumer configuration must be a ``dict`` in which the keys are the
         `consumer configs defined by Kafka <https://kafka.apache.org/23/documentation/#consumerconfigs>`_.
         A consumer configuration can be created with :func:`create_connection_properties`.
         The properties given as `consumer_config` override the same properties in an application
@@ -350,14 +350,14 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
     @property
     def group_size(self):
         """
-        int: The size of a Kafka consumer group, in which multiple consumers share 
+        int: The size of a Kafka consumer group, in which multiple consumers share
         the partitions of the subscribed topics.
-        
-        With ``group_size`` greater than 1, the 
+
+        With ``group_size`` greater than 1, the
         source stream is split into multiple channels as the start of a parallel region.
-        
+
         This is effectively the same as ``Stream.set_parallel(width=group_size)``.
-        
+
         The parallel region can be ended, for example, with ``Stream.end_parallel()``.
         """
         return self._group_size
@@ -369,12 +369,12 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
     @property
     def client_id(self):
         """
-        str: An optional client identifier for Kafka. The client identifier has no 
+        str: An optional client identifier for Kafka. The client identifier has no
         function for the application, but allows to identify the Kafka client within the Kafka server.
-        
+
         The client identifier given here overrides the consumer config ``client.id`` if given
         in an application configuration or within the consumer configuration.
-         
+
         .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
             have a different client identifier.
        """
@@ -385,10 +385,10 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
         self._client_id = client_id
 
     def populate(self, topology, name, **options) -> streamsx.topology.topology.Stream:
-        # test mandatory parameters 
+        # test mandatory parameters
         if self._topic is None:
             raise TypeError(self._topic)
-        
+
         if isinstance(self._topic, str):
             _topic_tok = self._topic.replace("-", "_")
         elif isinstance(self._topic, list):
@@ -435,7 +435,7 @@ class KafkaConsumer(_KafkaComposite, AbstractSource):
                             outputPartitionAttributeName=self._partition_attribute_name,
                             outputTopicAttributeName=self._topic_attribute_name,
                             propertiesFile=propsFilename,
-                            topic=self._topic, 
+                            topic=self._topic,
                             groupId=self._group_id,
                             clientId=self._client_id,
                             name=name)
@@ -452,13 +452,13 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
     Instances can be passed to ``Stream.for_each()`` to create a sink (stream termination).
 
     Trivial example::
-    
+
         producer = KafkaProducer(config={'bootstrap.servers': 'kafka-server.domain:9092'},
                                  topic="topic")
         stream_to_publish.for_each(producer)
 
     Example with two topics in IBM Event Streams cloud service::
-    
+
         eventstreams_credentials_json = "..."
         producer = KafkaProducer(create_connection_properties_for_eventstreams(eventstreams_credentials_json),
                                  topic=["topic1", "topic2"])
@@ -479,7 +479,7 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
         key_attribute_name(str): the attribute name in the schema that is used as the key for the Kafka message to publish.
             Required for user-defined schema when the attribute name is different from ``key``.
         **options(kwargs): optional arguments as keyword arguments. Following arguments are supported:
-        
+
             * client_id
             * app_config_name
             * producer_config - these configs override the configs given as the ``config`` parameter by being merged with them.
@@ -489,7 +489,7 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
 
     .. versionadded:: 1.8.0
     """
-    
+
     def __init__(self, config, topic, message_attribute_name=None, key_attribute_name=None, **options):
         """
         Args:
@@ -552,7 +552,7 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
         bool: enables verbose SSL debug output at runtime when SSL connections are used.
         """
         return self._ssl_debug
-    
+
     @ssl_debug.setter
     def ssl_debug(self, ssl_debug:bool):
         self._ssl_debug = ssl_debug
@@ -562,7 +562,7 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
         """
          str|list: Arguments for the Java Virtual Machine used at Runtime, for example ``-Xmx2G``.
              For multiple arguments, use a list::
-             
+
                  producer.vm_arg = ["-Xmx=2G", "-Xms=512M"]
         """
         return self._vm_arg
@@ -588,8 +588,8 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
     def producer_config(self):
         """
         dict: The producer configuration
-        
-        The producer configuration must be a ``dict`` in which the keys are the 
+
+        The producer configuration must be a ``dict`` in which the keys are the
         `producer configs defined by Kafka <https://kafka.apache.org/23/documentation/#producerconfigs>`_.
         A producer configuration can be created with :func:`create_connection_properties`.
         The properties given as `producer_config` override the same properties in an application
@@ -604,12 +604,12 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
     @property
     def client_id(self):
         """
-        str: An optional client identifier for Kafka. The client identifier has no 
+        str: An optional client identifier for Kafka. The client identifier has no
         function for the application, but allows to identify the Kafka client within the Kafka server.
-        
+
         The client identifier given here overrides the producer config ``client.id`` if given
         in an application configuration or within the producer configuration.
-        
+
         .. note:: Each instance of :py:class:`~KafkaConsumer` and :py:class:`~KafkaProducer` must
             have a different client identifier.
         """
@@ -620,10 +620,10 @@ class KafkaProducer(_KafkaComposite, AbstractSink):
         self._client_id = client_id
 
     def populate(self, topology, stream, name, **options) -> streamsx.topology.topology.Sink:
-        # test mandatory parameters 
+        # test mandatory parameters
         if self._topic is None:
             raise TypeError(self._topic)
-        
+
         if isinstance(self._topic, str):
             _topic_tok = self._topic.replace("-", "_")
         elif isinstance(self._topic, list):
@@ -804,7 +804,7 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
     else:
         topology.add_file_dependency(_filename, 'etc')
         print("Keystore file etc/" + _store_filename + " added to the topology " + topology.name)
-    
+
     _props = dict()
     _props['ssl.keystore.type'] = 'JKS'
     _props['ssl.keystore.password'] = _passwd
@@ -814,7 +814,7 @@ def _create_keystore_properties(client_cert, client_private_key, store_passwd=No
 
 
 def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=None, store_dir=None, topology=None):
-    """Creates a keystore, adds it as file dependency to the topology, and creates 
+    """Creates a keystore, adds it as file dependency to the topology, and creates
     the required properties to use a truststore.
 
     Args:
@@ -857,7 +857,7 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
     else:
         topology.add_file_dependency(_filename, 'etc')
         print("Truststore file etc/" + _store_filename + " added to the topology " + topology.name)
-    
+
     _props = dict()
     _props['ssl.truststore.type'] = 'JKS'
     _props['ssl.truststore.password'] = _passwd
@@ -866,11 +866,11 @@ def _create_truststore_properties(trusted_cert, store_passwd=None, store_suffix=
 
 
 def _create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostname_verification=True,
-                    cluster_ca_cert=None, authentication=AuthMethod.NONE, 
+                    cluster_ca_cert=None, authentication=AuthMethod.NONE,
                     client_cert=None, client_private_key=None, username=None, password=None, topology=None,
                     store_dir=None, store_pass=None, store_suffix=None):
     """Internal method. Assumes all parameters are validated.
-    """ 
+    """
     props = dict()
     _storePasswd = store_pass
     if _storePasswd is None or not _storePasswd.strip():
@@ -971,7 +971,7 @@ def download_toolkit(url=None, target_dir=None):
         streamsx.spl.toolkit.add_toolkit(topology, kafka_toolkit_location)
 
     Args:
-        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
+        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to
             download a specific version of the toolkit.
         target_dir(str): the directory where the toolkit is unpacked to. If a relative path is given,
             the path is appended to the system temporary directory, for example to /tmp on Unix/Linux systems.
@@ -992,7 +992,7 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
 
     Creates an application configuration object containing the required properties
     with connection information. The application configuration contains following properties:
-    
+
     - bootstrap.servers
     - security.protocol (when **ssl_protocol** is not ``None``)
     - ssl.protocol (when **ssl_protocol** is not ``None``)
@@ -1003,7 +1003,7 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
         from icpd_core import icpd_util
         from streamsx.rest_primitives import Instance
         import streamsx.kafka as kafka
-        
+
         cfg = icpd_util.get_service_instance_details(name='your-streams-instance')
         cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
         instance = Instance.of_service(cfg)
@@ -1013,16 +1013,16 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
         name(str): Name of the application configuration.
-        bootstrap_servers(str): Comma separated List of *hostname:TCPport* of the 
-            Kafka-bootstrap-servers, for example ``'server1:9093'``, or 
+        bootstrap_servers(str): Comma separated List of *hostname:TCPport* of the
+            Kafka-bootstrap-servers, for example ``'server1:9093'``, or
             ``'server1:9093,server2:9093,server3:9093'``.
 
         ssl_protocol(str): One of None, 'TLS', 'TLSv1', 'TLSv1.1', or 'TLSv1.2'.
             If None is used, TLS is not configured. If unsure, use 'TLS',
             which is Kafka's default.
 
-        enable_hostname_verification(bool): ``True`` (default) enables hostname 
-            verification of the server certificate, ``False`` disables hostname 
+        enable_hostname_verification(bool): ``True`` (default) enables hostname
+            verification of the server certificate, ``False`` disables hostname
             verification. The parameter is ignored, when ``ssl_protocol`` is ``None``.
     Returns:
         str: Name of the application configuration, i.e. the same value as given in the ``name`` parameter
@@ -1045,8 +1045,8 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
         raise TypeError(ssl_protocol)
     if not isinstance(enable_hostname_verification, bool):
         raise TypeError(enable_hostname_verification)
-    
-    
+
+
     kafkaProperties = {}
     kafkaProperties['bootstrap.servers'] = bootstrap_servers
     if ssl_protocol:
@@ -1057,7 +1057,7 @@ def configure_connection(instance, name, bootstrap_servers, ssl_protocol = None,
             warnings.warn('ignoring invalid sslProtocol ' + ssl_protocol + '. Using Kafkas default value')
         if not enable_hostname_verification:
             kafkaProperties['ssl.endpoint.identification.algorithm'] = ''
-            
+
     return configure_connection_from_properties(instance, name, kafkaProperties)
 
 
@@ -1065,20 +1065,20 @@ def configure_connection_from_properties(instance, name, properties, description
     """
     Configures IBM Streams for a connection with a Kafka broker.
 
-    Creates an application configuration object containing the required 
-    properties with connection information. The application configuration 
-    contains the properties given as key-value pairs in the `properties` 
-    dictionary. The keys must be valid 
-    `consumer <https://kafka.apache.org/22/documentation/#consumerconfigs>`_ 
+    Creates an application configuration object containing the required
+    properties with connection information. The application configuration
+    contains the properties given as key-value pairs in the `properties`
+    dictionary. The keys must be valid
+    `consumer <https://kafka.apache.org/22/documentation/#consumerconfigs>`_
     or `producer configurations <https://kafka.apache.org/22/documentation/#producerconfigs>`_.
 
     Example for creating a configuration for a Streams instance with connection details::
 
-        from streamsx.rest import Instance
+        from streamsx.rest_primitives import Instance
         import streamsx.topology.context
         from streamsx.kafka import create_connection_properties, configure_connection
         from icpd_core import icpd_util
-        
+
         cfg = icpd_util.get_service_instance_details(name='your-streams-instance')
         cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
         instance = Instance.of_service(cfg)
@@ -1090,7 +1090,7 @@ def configure_connection_from_properties(instance, name, properties, description
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
         name(str): Name of the application configuration.
         properties(dict): Properties containing valid consumer or producer configurations.
-        description(str): Description of the application configuration. If no 
+        description(str): Description of the application configuration. If no
             descrition is given, a description is generated.
     Returns:
         str: Name of the application configuration, i.e. the same value as given in the ``name`` parameter
@@ -1124,28 +1124,28 @@ def configure_connection_from_properties(instance, name, properties, description
     else:
         print('create application configuration: ' + name)
         instance.create_application_configuration(name, _properties, _description)
-    
+
     return name
 
 
 def create_connection_properties_for_eventstreams(credentials):
-    """Create Kafka configuration properties from service credentials for IBM event streams to connect 
-    with IBM event streams. The resulting properties can be used for example in 
+    """Create Kafka configuration properties from service credentials for IBM event streams to connect
+    with IBM event streams. The resulting properties can be used for example in
     :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
     and as ``producer_properties`` in :py:class:`~KafkaProducer`.
-    
+
     Args:
         credentials(dict|str): The service credentials for IBM event streams as a JSON dict or as string.
-            When a string is given, the parameter must be the name of an existing JSON file with credentials or 
+            When a string is given, the parameter must be the name of an existing JSON file with credentials or
             must contain the raw JSON credentials.
-        
+
     Returns:
         dict: Kafka properties that contain the connection information.
-        
+
     .. warning:: The returned properties contain sensitive data. Storing the properties in
         an application configuration is a good idea to avoid exposing sensitive information.
         On IBM Cloud Pak for Data use :func:`configure_connection_from_properties` to do this.
-        
+
     .. versionadded:: 1.7
     """
     if credentials is None:
@@ -1165,42 +1165,42 @@ def create_connection_properties_for_eventstreams(credentials):
 
 
 def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostname_verification=True,
-                    cluster_ca_cert=None, authentication=AuthMethod.NONE, 
+                    cluster_ca_cert=None, authentication=AuthMethod.NONE,
                     client_cert=None, client_private_key=None, username=None, password=None, topology=None):
     """Create Kafka properties that can be used to connect a consumer or a producer with a Kafka cluster
     when certificates and keys or authentication is required. The resulting properties can be used
     for example in :func:`configure_connection_from_properties`, as ``consumer_properties`` in :py:class:`~KafkaConsumer`,
     and as ``producer_properties`` in :py:class:`~KafkaProducer`.
-    
-    When certificates are given, the function will create a truststore and/or a keystore, 
+
+    When certificates are given, the function will create a truststore and/or a keystore,
     which are added as file dependencies to the topology, which must not be ``None`` in this case.
-    
+
     Certificates and keys are given as strings. The arguments can be the name of an existinig PEM formatted file,
     which the content is read, or the PEM formatted certificate or key directly. The PEM format is a text format
     with base64 encoded content between anchors::
-    
+
         -----BEGIN CERTIFICATE-----
         ...
         -----END CERTIFICATE-----
-    
+
     or::
-    
+
         -----BEGIN PRIVATE KEY-----
         ...
         -----END PRIVATE KEY-----
 
     **Example**, in which the brokers are configured for SCRAM-SHA-512 authentication over a TLS connection,
-    and where the server certificates are not signed by a public CA. In the example, the CA certificate 
+    and where the server certificates are not signed by a public CA. In the example, the CA certificate
     for the cluster is stored in the file */tmp/secrets/cluster_ca.crt*::
-    
+
         from streamsx.topology.topology import Topology
         from streamsx.topology.schema import CommonSchema
         import streamsx.kafka as kafka
-        
+
         consumerTopology = Topology('ConsumeFromKafka')
-        
+
         consumerProperties = dict()
-        
+
         # In this example we read only transactionally committed messages
         consumerProperties['isolation.level'] = 'read_committed'
         connectionProps = kafka.create_connection_properties(
@@ -1212,44 +1212,44 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
             username = 'user123',
             password = 'passw0rd', # not the very best choice for a password
             topology = consumerTopology)
-        
+
         # add connection specifc properties to the consumer properties
         consumerProperties.update(connectionProps)
         messages = kafka.subscribe (consumerTopology, 'mytopic', consumerProperties, CommonSchema.String)
-    
+
     Args:
         bootstrap_servers(str): The bootstrap address of the Kafka cluster.
             This is a single *hostname:TCPport* pair or a comma separated List of *hostname:TCPport*,
             for example ``'server1:9093'``, or ``'server1:9093,server2:9093,server3:9093'``.
-            
+
         use_TLS(bool): When ``True`` (default), the client connects via encrypted connections with the Kafka brokers.
-            In this case it may also be necessary to provide the CA certificate of the cluster 
+            In this case it may also be necessary to provide the CA certificate of the cluster
             within the **cluster_ca_cert** parameter.
             When the parameter is ``False``, the traffic to the Kafka brokers is not encrypted.
-            
+
         enable_hostname_verification(bool): When ``True`` (default), the hostname verification of the
-            presented server certificate is enabled. For example, some methods to expose a 
+            presented server certificate is enabled. For example, some methods to expose a
             containerized Kafka cluster do not support hostname verification.
             In these cases hostname verification must be disabled.
-            
+
             The parameter is ignored when **use_TLS** is ``False``.
-            
-        cluster_ca_cert(str|list): The CA certificate of the broker certificates or a list of them. This certificate is 
+
+        cluster_ca_cert(str|list): The CA certificate of the broker certificates or a list of them. This certificate is
             required when the cluster does not use certificates signed by a public CA authority.
-            The parameter must be the name of an existing PEM formatted file or the PEM formatted certificate itself, 
+            The parameter must be the name of an existing PEM formatted file or the PEM formatted certificate itself,
             or a list of filenames or PEM strings. These certificates are treated as trusted and go into a truststore.
-            
+
             A trusted certificate must have a text format like this::
-            
+
                 -----BEGIN CERTIFICATE-----
                 ...
                 -----END CERTIFICATE-----
-           
+
             The parameter is ignored when **use_TLS** is ``False``.
-           
+
         authentication(AuthMethod): The authentication method used by the brokers.
-            
-            * None, AuthMethod.NONE: clients are not authenticated. The parameters 
+
+            * None, AuthMethod.NONE: clients are not authenticated. The parameters
               **client_cert**, **client_private_key**, **username**, and **password** are ignored.
             * AuthMethod.PLAIN: PLAIN, or SASL/PLAIN, is a simple username/password authentication
               mechanism that is typically used with TLS for encryption to implement secure authentication.
@@ -1257,51 +1257,51 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
               passwords are not transmitted on the wire without encryption.
             * AuthMethod.TLS: clients are authorized with client certificates. This authentication method
               can only be used when the client uses a TLS connection, i.e. when **use_TLS** is ``True``.
-              The client certificate must be trusted by the server, and must be and given as the 
-              **client_cert** parameter together with the corresponding private key as 
+              The client certificate must be trusted by the server, and must be and given as the
+              **client_cert** parameter together with the corresponding private key as
               the **client_private_key** parameter.
             * AuthMethod.SCRAM_SHA_512: SCRAM (Salted Challenge Response Authentication Mechanism) is an
               authentication protocol that can establish authentication using usernames and passwords.
-              It can be used with or without a TLS client connection. This authentication 
+              It can be used with or without a TLS client connection. This authentication
               method requires that the parameters **username** and **password** are used.
-              
+
         client_cert(str): The client certificate, i.e. the public part of a key pair signed by an
-            authority that is trusted by the brokers. The parameter must be the name of 
+            authority that is trusted by the brokers. The parameter must be the name of
             an existing PEM formatted file or the PEM formatted certificate itself.
             The client certificate must have a text format like this::
-            
+
                 -----BEGIN CERTIFICATE-----
                 ...
                 -----END CERTIFICATE-----
-            
+
             The parameter is ignored when **authentication** is not 'TLS'.
-            
+
         client_private_key(str): The private part of the RSA key pair on which the client certificate is based.
-            The parameter must be the name of an existing PEM formatted file or the PEM 
+            The parameter must be the name of an existing PEM formatted file or the PEM
             formatted key itself. The private key must have a text format like this::
-            
+
                 -----BEGIN PRIVATE KEY-----
                 ...
                 -----END PRIVATE KEY-----
 
             The parameter is ignored when **authentication** is not 'TLS'.
-            
+
         username(str): The username for SCRAM authentication.
             The parameter is ignored when **authentication** is not 'SCRAM-SHA-512'.
 
         password(str): The password for SCRAM authentication.
             The parameter is ignored when **authentication** is not 'SCRAM-SHA-512'.
 
-        topology(Topology): The topology to which a truststore and or keystore as 
-            file dependencies are added. It must be this Topology instance, which 
+        topology(Topology): The topology to which a truststore and or keystore as
+            file dependencies are added. It must be this Topology instance, which
             the created Kafka properties are used. The parameter must not be
-            None when one of the parameters **cluster_ca_cert**, **client_cert**, 
+            None when one of the parameters **cluster_ca_cert**, **client_cert**,
             or **client_private_key** is not ``None``.
-            
+
     Returns:
-        dict: Kafka properties 
-        
-    .. note:: When certificates are needed, this function can be used only with 
+        dict: Kafka properties
+
+    .. note:: When certificates are needed, this function can be used only with
         the **streamsx.kafka** toolkit version 1.9.2 and higher.
         The function will add a toolkit dependency to the topology.
         When the toolkit dependency cannot be satisfied, use a newer toolkit version.
@@ -1309,7 +1309,7 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
     .. warning:: The returned properties can contain sensitive data. Storing the properties in
         an application configuration is a good idea to avoid exposing sensitive information.
         On IBM Cloud Pak for Data use :func:`configure_connection_from_properties` to do this.
-        
+
     .. versionadded:: 1.3
     """
     if bootstrap_servers is None:
@@ -1346,7 +1346,7 @@ def create_connection_properties(bootstrap_servers, use_TLS=True, enable_hostnam
 
     props = _create_connection_properties(bootstrap_servers=bootstrap_servers, use_TLS=use_TLS, enable_hostname_verification=enable_hostname_verification,
                                           cluster_ca_cert=cluster_ca_cert,
-                                          authentication=_auth, 
+                                          authentication=_auth,
                                           client_cert=client_cert, client_private_key=client_private_key,
                                           username=username, password=password,
                                           topology=topology,
@@ -1364,8 +1364,8 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
     Args:
         topology(Topology): Topology that will contain the stream of messages.
         topic(str): Topic to subscribe messages from.
-        kafka_properties(dict|str): Properties containing the consumer configurations, at 
-            minimum the ``bootstrap.servers`` property. When a string is given, it is the 
+        kafka_properties(dict|str): Properties containing the consumer configurations, at
+            minimum the ``bootstrap.servers`` property. When a string is given, it is the
             name of the application configuration, which contains consumer configs.
             Must not be ``None``.
         schema(StreamSchema): Schema for returned stream.
@@ -1413,9 +1413,9 @@ def subscribe(topology, topic, kafka_properties, schema, group=None, name=None):
         propsFilename = _add_properties_file(topology, kafka_properties, tmpf.name)
         _op = _KafkaConsumer(topology, schema=schema,
                              outputMessageAttributeName=msg_attr_name,
-                             propertiesFile=propsFilename, 
-                             topic=topic, 
-                             groupId=group, 
+                             propertiesFile=propsFilename,
+                             topic=topic,
+                             groupId=group,
                              name=name)
     elif isinstance(kafka_properties, str):
         _op = _KafkaConsumer(topology, schema=schema,
@@ -1439,8 +1439,8 @@ def publish(stream, topic, kafka_properties, name=None):
     Args:
         stream(Stream): Stream of tuples to be published as messages.
         topic(str): Topic to publish messages to.
-        kafka_properties(dict|str): Properties containing the producer configurations, 
-            at minimum the ``bootstrap.servers`` property. When a string is given, it 
+        kafka_properties(dict|str): Properties containing the producer configurations,
+            at minimum the ``bootstrap.servers`` property. When a string is given, it
             is the name of the application configuration, which contains producer configs.
             Must not be ``None``.
         name(str): Producer name in the Streams context, defaults to a generated name.

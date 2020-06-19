@@ -94,7 +94,7 @@ Example with use of an application configuration for use on IBM Cloud Pak for Da
     
     from streamsx.topology.topology import Topology
     from streamsx.topology.schema import CommonSchema
-    from streamsx.rest import Instance
+    from streamsx.rest_primitives import Instance
     import streamsx.topology.context
     
     import streamsx.kafka as kafka
