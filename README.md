@@ -1,6 +1,6 @@
 ## Python streamsx.kafka package.
 
-This exposes SPL operators in the `com.ibm.streamsx.kafka` toolkit as Python methods.
+This exposes SPL operators in the `com.ibm.streamsx.kafka` toolkit as Python classes.
 
 Package is organized using standard packaging to upload to PyPi.
 
